@@ -1,0 +1,44 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./backend
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      STORAGE_PATH: ${STORAGE_PATH}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    ports:
+      - "${API_PORT}:8000"
+    volumes:
+      - ./backend:/app
+      - ./storage:${STORAGE_PATH}
+    depends_on:
+      - db
+
+  front:
+    build:
+      context: ./frontend
+    env_file:
+      - ./.env
+    ports:
+      - "${FRONT_PORT}:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - api
+
+volumes:
+  db_data:
