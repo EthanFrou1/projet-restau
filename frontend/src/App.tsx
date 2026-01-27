@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import LoginPage from "@/pages/Login";
-import DevPanelPage from "@/pages/DevPanel";
+import DashboardPage from "@/pages/Dashboard";
 
 export default function App() {
   const [isLogged, setIsLogged] = useState(false);
@@ -14,5 +14,5 @@ export default function App() {
     return <LoginPage onLoggedIn={() => setIsLogged(true)} />;
   }
 
-  return <DevPanelPage onLoggedOut={() => setIsLogged(false)}/>;
+  return <DashboardPage onLoggedOut={() => setIsLogged(false)} />;
 }

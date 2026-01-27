@@ -46,7 +46,7 @@ services:
     volumes:
       - ./frontend:/app
       - front_node_modules:/app/node_modules
-    command: sh -c "rm -f package-lock.json && npm install && npm run dev -- --host 0.0.0.0"
+    command: sh -c "if [ -f package-lock.json ]; then npm ci; else npm install; fi && npm run dev -- --host 0.0.0.0"
     depends_on:
       - api
 

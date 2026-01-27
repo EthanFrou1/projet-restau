@@ -7,6 +7,8 @@ from app.api.auth import router as auth_router
 from app.api.admin import router as admin_router
 from app.api.debug import router as debug_router
 from app.api.audit import router as audit_router
+from app.api.bk_reports import router as bk_reports_router
+from app.api.restaurants import router as restaurants_router
 import os
 
 import app.models
@@ -17,6 +19,8 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(debug_router)
 app.include_router(audit_router)
+app.include_router(bk_reports_router)
+app.include_router(restaurants_router)
 
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 

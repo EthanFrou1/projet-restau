@@ -1,92 +1,131 @@
-# Projet Restau 🍽️
+# Projet Restau
 
-Application de consolidation financière multi-restaurants.
+Application de consolidation financiere multi-restaurants.
 
-L’objectif est de centraliser les chiffres quotidiens de plusieurs restaurants,
-de les valider, les consolider, et de produire un export Excel fiable destiné à la direction.
-
----
-
-## 🧱 Architecture (vue d’ensemble)
-
-- **Backend** : FastAPI (Python)
-- **Frontend** : React + TypeScript (Vite)
-- **Base de données** : PostgreSQL
-- **ORM** : SQLAlchemy + Alembic (migrations)
-- **Environnement** : Docker & Docker Compose
-
-👉 L’ensemble du projet est conçu pour être lancé **en une seule commande** via Docker.
+Objectif: centraliser les chiffres quotidiens, valider, consolider,
+et produire un export fiable pour la direction.
 
 ---
 
-## 📦 Prérequis
+## Architecture (vue d'ensemble)
 
-Avant de commencer, assure-toi d’avoir installé :
+- Backend : FastAPI (Python)
+- Frontend : React + TypeScript (Vite)
+- Base de donnees : PostgreSQL
+- ORM : SQLAlchemy + Alembic (migrations)
+- Environnement : Docker & Docker Compose
 
-- Docker Desktop (Windows / macOS / Linux)
+Tout le projet est lance en une seule commande via Docker.
+
+---
+
+## Prerequis
+
+- Docker Desktop
 - Git
 
-👉 Aucun Python ou Node n’est requis en local : **tout passe par Docker**.
+Aucun Python ou Node requis en local : tout passe par Docker.
 
 ---
 
-## 🚀 Lancer le projet en local
+## Lancer le projet en local
 
-### 1️⃣ Cloner le dépôt
+### 1) Cloner le depot
 ```bash
 git clone https://github.com/EthanFrou1/projet-restau.git
 cd projet-restau
+```
 
-2️⃣ Créer le fichier d’environnement
+### 2) Creer le fichier d'environnement
+```bash
 cp .env.example .env
-Le fichier .env.example est déjà configuré pour un usage local.
-Tu peux l’éditer si besoin (ports, credentials, etc.).
+```
+Le fichier `.env.example` est deja configure pour un usage local.
 
-3️⃣ Démarrer l’application
+### 3) Demarrer tout (DB + API + Front)
+```bash
 docker compose up --build
-⏳ Le premier lancement peut prendre quelques minutes (build des images).
+```
+Le premier lancement peut prendre quelques minutes.
 
-🌍 Accès aux services
-Une fois le projet démarré :
+### 4) Acces aux services
+- API : http://localhost:8000
+- Docs Swagger : http://localhost:8000/docs
+- Frontend : http://localhost:5173
+- Health check : http://localhost:8000/health
 
-API (FastAPI)
-http://localhost:8000
-http://localhost:8000/docs (Swagger)
+---
 
-Frontend (React)
-http://localhost:5173
+## Bonnes pratiques Docker (projet)
 
-Health check API
-http://localhost:8000/health
+### Quand utiliser --build
+- Premier lancement
+- Changement dans un Dockerfile
+- Ajout/suppression de dependances (Python ou Node)
 
-Si ces URLs répondent, le projet est correctement lancé ✅
+### Lockfile Frontend
+- `package-lock.json` reste dans le repo.
+- Le container utilise `npm ci` si le lockfile existe.
+- Evite `npm install` si tu as deja un lockfile.
 
-📁 Structure du projet (simplifiée)
-bash
-Copier le code
+---
+
+## Demarrer chaque partie separement (optionnel)
+
+### Base de donnees
+```bash
+docker compose up -d db
+```
+
+### Backend (API)
+```bash
+docker compose up api
+```
+
+### Frontend
+```bash
+docker compose up front
+```
+
+---
+
+## Structure du projet (simplifiee)
+```
 projet-restau/
 ├── backend/        # API FastAPI
 │   ├── app/
-│   │   ├── api/    # routes & dépendances
-│   │   ├── core/   # sécurité, auth, config
+│   │   ├── api/    # routes & dependances
+│   │   ├── core/   # securite, auth, config
 │   │   ├── db/     # SQLAlchemy (engine, session, base)
-│   │   ├── models/ # modèles ORM
+│   │   ├── models/ # modeles ORM
 │   ├── alembic/    # migrations DB
 │   └── Dockerfile
 ├── frontend/       # React + Vite
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
+```
 
-🛠️ Commandes utiles
-Arrêter les services :
+---
+
+## Commandes utiles
+
+Arreter les services :
+```bash
 docker compose down
+```
 
 Rebuild complet :
+```bash
 docker compose up --build
+```
 
 Entrer dans le container API :
+```bash
 docker compose exec api bash
+```
 
 Entrer dans le container DB :
+```bash
 docker compose exec db bash
+```

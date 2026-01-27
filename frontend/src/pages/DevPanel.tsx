@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { TopBar } from "@/components/TopBar";
 import { createUser } from "@/lib/auth";
 import { logout, listUsers, deleteUser } from "@/lib/auth";
+import { UserRestaurantAssign } from "@/components/admin/UserRestaurantAssign";
+import { RestaurantManager } from "@/components/admin/RestaurantManager";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -368,6 +370,8 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                             </div>
                             </CardContent>
                         </Card>
+                        <RestaurantManager />
+                        <UserRestaurantAssign users={users} />
                     </div>
                 )}
 

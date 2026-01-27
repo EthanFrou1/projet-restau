@@ -8,6 +8,7 @@ from app.api.auth_deps import require_roles
 from app.core.roles import Role
 from app.core.security import hash_password
 from app.models.user import User
+from app.models.restaurant import Restaurant
 from app.core.audit import write_audit_log
 from app.core.utils import normalize_email
 
@@ -55,6 +56,18 @@ class UserOut(BaseModel):
     role: str
     is_active: bool
 
+class RestaurantOut(BaseModel):
+    id: int
+    code: str
+    name: str
+
+class RestaurantCreateIn(BaseModel):
+    code: str = Field(min_length=2)
+    name: str = Field(min_length=2)
+
+class UserRestaurantsIn(BaseModel):
+    restaurant_codes: list[str] = Field(min_length=1)
+
 @router.get("/users", response_model=List[UserOut])
 def list_users(
     db: Session = Depends(get_db),
@@ -65,6 +78,58 @@ def list_users(
         UserOut(id=u.id, email=u.email, role=u.role, is_active=u.is_active)
         for u in users
     ]
+
+@router.get("/restaurants", response_model=List[RestaurantOut])
+def list_restaurants(
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles([Role.DEV])),
+):
+    rows = db.query(Restaurant).order_by(Restaurant.code.asc()).all()
+    return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in rows]
+
+@router.post("/restaurants", response_model=RestaurantOut)
+def create_restaurant(
+    payload: RestaurantCreateIn,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles([Role.DEV])),
+):
+    code = payload.code.strip().upper()
+    name = payload.name.strip()
+    existing = db.query(Restaurant).filter(Restaurant.code == code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Restaurant code already exists")
+    restaurant = Restaurant(code=code, name=name)
+    db.add(restaurant)
+    db.commit()
+    db.refresh(restaurant)
+    return RestaurantOut(id=restaurant.id, code=restaurant.code, name=restaurant.name)
+
+@router.put("/users/{user_id}/restaurants", response_model=List[RestaurantOut])
+def set_user_restaurants(
+    user_id: int = Path(..., ge=1),
+    payload: UserRestaurantsIn | None = None,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles([Role.DEV])),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    codes = [c.strip().upper() for c in (payload.restaurant_codes if payload else [])]
+    if not codes:
+        raise HTTPException(status_code=400, detail="restaurant_codes is required")
+
+    restaurants = db.query(Restaurant).filter(Restaurant.code.in_(codes)).all()
+    found = {r.code for r in restaurants}
+    missing = [c for c in codes if c not in found]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Unknown restaurant codes: {', '.join(missing)}")
+
+    user.restaurants = restaurants
+    db.commit()
+    db.refresh(user)
+
+    return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in user.restaurants]
 
 @router.delete("/users/{user_id}")
 def delete_user(

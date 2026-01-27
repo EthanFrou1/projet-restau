@@ -30,7 +30,8 @@ async function tryRefresh(): Promise<boolean> {
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers || {});
-  headers.set("Content-Type", "application/json");
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+  if (!isFormData) headers.set("Content-Type", "application/json");
 
   if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
@@ -48,7 +49,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     const ok = await tryRefresh();
     if (ok) {
       const h2 = new Headers(init.headers || {});
-      h2.set("Content-Type", "application/json");
+      if (!isFormData) h2.set("Content-Type", "application/json");
       if (accessToken) h2.set("Authorization", `Bearer ${accessToken}`);
 
       res = await fetch(`${API_URL}${path}`, {
