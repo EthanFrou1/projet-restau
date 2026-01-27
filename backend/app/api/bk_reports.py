@@ -1,11 +1,12 @@
 import csv
+import calendar
 from datetime import date
 from decimal import Decimal
 from io import StringIO
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_db
 from app.api.auth_deps import require_roles
@@ -240,6 +241,117 @@ def upload_bk_report(
     return {"report_id": report.id}
 
 
+@router.get("")
+def list_bk_reports(
+    start_date: date | None = None,
+    end_date: date | None = None,
+    restaurant_code: str | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles([Role.MANAGER, Role.ADMIN, Role.DEV, Role.READONLY])),
+):
+    query = db.query(BKDailyReport)
+
+    if start_date:
+        query = query.filter(BKDailyReport.report_date >= start_date)
+    if end_date:
+        query = query.filter(BKDailyReport.report_date <= end_date)
+
+    if restaurant_code:
+        query = query.filter(
+            BKDailyReport.restaurant_code == restaurant_code.strip().upper()
+        )
+
+    if user.role not in (Role.ADMIN.value, Role.DEV.value):
+        allowed = [r.code for r in user.restaurants]
+        if not allowed:
+            return []
+        query = query.filter(BKDailyReport.restaurant_code.in_(allowed))
+
+    reports = (
+        query.order_by(BKDailyReport.report_date.desc(), BKDailyReport.restaurant_code.asc())
+        .all()
+    )
+
+    return [
+        {
+            "id": report.id,
+            "restaurant_code": report.restaurant_code,
+            "report_date": report.report_date.isoformat(),
+            "created_at": report.created_at.isoformat(),
+        }
+        for report in reports
+    ]
+
+
+@router.get("/monthly")
+def list_bk_reports_monthly(
+    year: int,
+    month: int,
+    restaurant_code: str | None = None,
+    db: Session = Depends(get_db),
+    user=Depends(require_roles([Role.MANAGER, Role.ADMIN, Role.DEV, Role.READONLY])),
+):
+    if month < 1 or month > 12:
+        raise HTTPException(status_code=400, detail="Invalid month")
+
+    last_day = calendar.monthrange(year, month)[1]
+    start_date = date(year, month, 1)
+    end_date = date(year, month, last_day)
+
+    query = (
+        db.query(BKDailyReport)
+        .options(joinedload(BKDailyReport.channel_sales))
+        .filter(
+            BKDailyReport.report_date >= start_date,
+            BKDailyReport.report_date <= end_date,
+        )
+    )
+
+    if restaurant_code:
+        query = query.filter(
+            BKDailyReport.restaurant_code == restaurant_code.strip().upper()
+        )
+
+    if user.role not in (Role.ADMIN.value, Role.DEV.value):
+        allowed = [r.code for r in user.restaurants]
+        if not allowed:
+            return []
+        query = query.filter(BKDailyReport.restaurant_code.in_(allowed))
+
+    reports = (
+        query.order_by(BKDailyReport.report_date.asc(), BKDailyReport.restaurant_code.asc())
+        .all()
+    )
+
+    def _safe_float(value: Any) -> float:
+        if value is None:
+            return 0.0
+        try:
+            return float(value)
+        except Exception:
+            return 0.0
+
+    payload = []
+    for report in reports:
+        ca_net_total = sum(_safe_float(r.ca_net) for r in report.channel_sales)
+        ca_ttc_total = sum(_safe_float(r.ca_ttc) for r in report.channel_sales)
+        tac_total = sum((r.tac or 0) for r in report.channel_sales)
+
+        payload.append(
+            {
+                "id": report.id,
+                "restaurant_code": report.restaurant_code,
+                "report_date": report.report_date.isoformat(),
+                "created_at": report.created_at.isoformat(),
+                "ca_net_total": ca_net_total,
+                "ca_ttc_total": ca_ttc_total,
+                "tac_total": tac_total,
+            }
+        )
+
+    return payload
+
+
 @router.get("/{report_id}")
 def get_bk_report(
     report_id: int,
@@ -326,4 +438,3 @@ def get_bk_report(
             for r in report.annex_sales
         ],
     }
-

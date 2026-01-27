@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { logout, listUsers, createUser, deleteUser } from "@/lib/auth";
 import { BkReportUploader } from "@/components/bk/BkReportUploader";
 import { BkReportView } from "@/components/bk/BkReportView";
+import { BkReportBrowser } from "@/components/bk/BkReportBrowser";
+import { BkMonthlyRecap } from "@/components/bk/BkMonthlyRecap";
 import { apiFetch } from "@/lib/api";
 import type { BKReport } from "@/components/bk/types";
 import { getMyRestaurants } from "@/lib/restaurants";
@@ -67,6 +69,8 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
   }, [me]);
 
   const isDev = me?.role === "DEV";
+  const canViewGlobalBk =
+    me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV" || me?.role === "READONLY";
   const pageSize = 10;
   const totalUserPages = Math.max(1, Math.ceil(devUsers.length / pageSize));
   const usersPageStart = (devUsersPage - 1) * pageSize;
@@ -168,6 +172,8 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
           <TabsList>
             <TabsTrigger value="overview">Dashboard</TabsTrigger>
             <TabsTrigger value="data">Mes données</TabsTrigger>
+            {canViewGlobalBk && <TabsTrigger value="bk-global">BK global</TabsTrigger>}
+            {canViewGlobalBk && <TabsTrigger value="bk-monthly">BK mensuel</TabsTrigger>}
             {isDev && <TabsTrigger value="dev">Dev</TabsTrigger>}
           </TabsList>
 
@@ -226,6 +232,18 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
 
             <BkReportView report={report} />
           </TabsContent>
+
+          {canViewGlobalBk && (
+            <TabsContent value="bk-global" className="space-y-4">
+              <BkReportBrowser restaurants={restaurants} />
+            </TabsContent>
+          )}
+
+          {canViewGlobalBk && (
+            <TabsContent value="bk-monthly" className="space-y-4">
+              <BkMonthlyRecap restaurants={restaurants} />
+            </TabsContent>
+          )}
           {isDev && (
           <TabsContent value="dev" className="space-y-4">
             <Card>

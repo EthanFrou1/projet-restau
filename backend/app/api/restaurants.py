@@ -14,11 +14,11 @@ def my_restaurants(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    _ = db  # keeps signature consistent if we later need queries
-    return [
-        {"id": r.id, "code": r.code, "name": r.name}
-        for r in user.restaurants
-    ]
+    if user.role == Role.DEV.value:
+        rows = db.query(Restaurant).order_by(Restaurant.code.asc()).all()
+        return [{"id": r.id, "code": r.code, "name": r.name} for r in rows]
+
+    return [{"id": r.id, "code": r.code, "name": r.name} for r in user.restaurants]
 
 
 @router.get("")

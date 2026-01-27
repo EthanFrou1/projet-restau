@@ -13,7 +13,7 @@ type Props = {
 };
 
 export function BkReportUploader({ restaurants, onUploaded }: Props) {
-  const [reportDate, setReportDate] = useState("");
+  const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [restaurantCode, setRestaurantCode] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
@@ -29,6 +29,18 @@ export function BkReportUploader({ restaurants, onUploaded }: Props) {
 
   const canSelectRestaurant = restaurants.length > 1;
   const fixedRestaurantCode = restaurants.length === 1 ? restaurants[0].code : "";
+  const finalCode = (restaurantCode || fixedRestaurantCode).trim().toUpperCase();
+  const allFilesSelected = !!(
+    fileCaparprofit &&
+    fileConsommation &&
+    fileCorrections &&
+    fileDivers &&
+    fileReglement &&
+    fileRemises &&
+    fileTva &&
+    fileVenteAnnexes
+  );
+  const canSubmit = !!reportDate && !!finalCode && allFilesSelected && !uploading;
 
   useEffect(() => {
     if (fixedRestaurantCode && !restaurantCode) {
@@ -106,50 +118,58 @@ export function BkReportUploader({ restaurants, onUploaded }: Props) {
 
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">SyntheseCA_caparprofit.csv</div>
-              <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileCaparprofit(e.target.files?.[0] ?? null)} />
-              <div className="text-xs text-muted-foreground">{fileCaparprofit?.name ?? "Aucun fichier"}</div>
+              <div className={fileCaparprofit ? "rounded-md bg-green-50 p-2" : ""}>
+                <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileCaparprofit(e.target.files?.[0] ?? null)} />
+              </div>
             </div>
 
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">SyntheseCA_consommationparprofit.csv</div>
-              <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileConsommation(e.target.files?.[0] ?? null)} />
-              <div className="text-xs text-muted-foreground">{fileConsommation?.name ?? "Aucun fichier"}</div>
+              <div className={fileConsommation ? "rounded-md bg-green-50 p-2" : ""}>
+                <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileConsommation(e.target.files?.[0] ?? null)} />
+              </div>
             </div>
 
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">SyntheseCA_corrections.csv</div>
-              <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileCorrections(e.target.files?.[0] ?? null)} />
-              <div className="text-xs text-muted-foreground">{fileCorrections?.name ?? "Aucun fichier"}</div>
+              <div className={fileCorrections ? "rounded-md bg-green-50 p-2" : ""}>
+                <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileCorrections(e.target.files?.[0] ?? null)} />
+              </div>
             </div>
 
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">SyntheseCA_divers.csv</div>
-              <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileDivers(e.target.files?.[0] ?? null)} />
-              <div className="text-xs text-muted-foreground">{fileDivers?.name ?? "Aucun fichier"}</div>
+              <div className={fileDivers ? "rounded-md bg-green-50 p-2" : ""}>
+                <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileDivers(e.target.files?.[0] ?? null)} />
+              </div>
             </div>
 
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">SyntheseCA_reglement.csv</div>
-              <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileReglement(e.target.files?.[0] ?? null)} />
-              <div className="text-xs text-muted-foreground">{fileReglement?.name ?? "Aucun fichier"}</div>
+              <div className={fileReglement ? "rounded-md bg-green-50 p-2" : ""}>
+                <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileReglement(e.target.files?.[0] ?? null)} />
+              </div>
             </div>
 
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">SyntheseCA_remises.csv</div>
-              <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileRemises(e.target.files?.[0] ?? null)} />
-              <div className="text-xs text-muted-foreground">{fileRemises?.name ?? "Aucun fichier"}</div>
+              <div className={fileRemises ? "rounded-md bg-green-50 p-2" : ""}>
+                <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileRemises(e.target.files?.[0] ?? null)} />
+              </div>
             </div>
 
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">SyntheseCA_tva.csv</div>
-              <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileTva(e.target.files?.[0] ?? null)} />
-              <div className="text-xs text-muted-foreground">{fileTva?.name ?? "Aucun fichier"}</div>
+              <div className={fileTva ? "rounded-md bg-green-50 p-2" : ""}>
+                <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileTva(e.target.files?.[0] ?? null)} />
+              </div>
             </div>
 
             <div className="space-y-2">
               <div className="text-xs text-muted-foreground">SyntheseCA_venteAnnexes.csv</div>
-              <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileVenteAnnexes(e.target.files?.[0] ?? null)} />
-              <div className="text-xs text-muted-foreground">{fileVenteAnnexes?.name ?? "Aucun fichier"}</div>
+              <div className={fileVenteAnnexes ? "rounded-md bg-green-50 p-2" : ""}>
+                <Input type="file" accept=".csv,text/csv" onChange={(e) => setFileVenteAnnexes(e.target.files?.[0] ?? null)} />
+              </div>
             </div>
           </div>
 
@@ -182,7 +202,7 @@ export function BkReportUploader({ restaurants, onUploaded }: Props) {
         </div>
 
         <div className="flex gap-2">
-          <Button onClick={handleUpload} disabled={uploading}>
+          <Button onClick={handleUpload} disabled={!canSubmit}>
             {uploading ? "Import..." : "Importer les CSV"}
           </Button>
         </div>
