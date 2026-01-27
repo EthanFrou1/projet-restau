@@ -9,6 +9,11 @@ services:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
   api:
     build:
@@ -25,7 +30,11 @@ services:
       - ./backend:/app
       - ./storage:${STORAGE_PATH}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
   front:
     build:
@@ -36,9 +45,11 @@ services:
       - "${FRONT_PORT}:5173"
     volumes:
       - ./frontend:/app
-      - /app/node_modules
+      - front_node_modules:/app/node_modules
+    command: sh -c "rm -f package-lock.json && npm install && npm run dev -- --host 0.0.0.0"
     depends_on:
       - api
 
 volumes:
   db_data:
+  front_node_modules:

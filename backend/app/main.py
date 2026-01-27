@@ -1,10 +1,22 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from app.core.seed import seed_dev_user_if_needed
 from app.db.session import engine
+from app.api.auth import router as auth_router
+from app.api.admin import router as admin_router
+from app.api.debug import router as debug_router
+from app.api.audit import router as audit_router
 import os
 
+import app.models
+
 app = FastAPI(title="Projet Restau API", version="0.1.0")
+
+app.include_router(auth_router)
+app.include_router(admin_router)
+app.include_router(debug_router)
+app.include_router(audit_router)
 
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 
@@ -36,3 +48,7 @@ def tables():
             ORDER BY tablename;
         """)).fetchall()
         return {"tables": [r[0] for r in rows]}
+    
+@app.on_event("startup")
+def on_startup():
+    seed_dev_user_if_needed()
