@@ -6,12 +6,14 @@ from io import StringIO
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_db
 from app.api.auth_deps import require_roles
 from app.core.roles import Role
 from app.models.bk_report import (
+    BKDailyKpi,
     BKAnnexSale,
     BKChannelSales,
     BKConsumptionMode,
@@ -24,6 +26,18 @@ from app.models.bk_report import (
 )
 
 router = APIRouter(prefix="/reports/bk", tags=["reports-bk"])
+
+
+class BKDailyKpiUpdate(BaseModel):
+    n1_ht: Decimal | None = None
+    var_n1: Decimal | None = None
+    prev_ht: Decimal | None = None
+    clients_n1: int | None = None
+    ca_delivery_n1: Decimal | None = None
+    client_delivery_n1: int | None = None
+    cnc_n1: Decimal | None = None
+    client_n1: int | None = None
+    cash_diff: Decimal | None = None
 
 
 def _decode_csv_bytes(raw: bytes) -> str:
@@ -108,19 +122,114 @@ def upload_bk_report(
     db.flush()
 
     # caparprofit
+    channel_rows: list[dict[str, Any]] = []
     for row in _read_csv_rows(caparprofit):
+        channel_label = str(row.get("profit", "")).strip()
+        channel_rows.append(
+            {
+                "channel_label": channel_label,
+                "tac": _parse_int(row.get("tac")),
+                "ca_net": _parse_decimal(row.get("net")),
+                "ca_ttc": _parse_decimal(row.get("ttc")),
+                "pm_net": _parse_decimal(row.get("panierMoyenNet")),
+                "pm_ttc": _parse_decimal(row.get("panierMoyenTTC")),
+                "net_total_profit": _parse_decimal(row.get("netTotalProfit")),
+            }
+        )
+
+    for row in channel_rows:
         db.add(
             BKChannelSales(
                 report_id=report.id,
-                channel_label=str(row.get("profit", "")).strip(),
-                tac=_parse_int(row.get("tac")),
-                ca_net=_parse_decimal(row.get("net")),
-                ca_ttc=_parse_decimal(row.get("ttc")),
-                pm_net=_parse_decimal(row.get("panierMoyenNet")),
-                pm_ttc=_parse_decimal(row.get("panierMoyenTTC")),
-                net_total_profit=_parse_decimal(row.get("netTotalProfit")),
+                channel_label=row["channel_label"],
+                is_total=False,
+                tac=row["tac"],
+                ca_net=row["ca_net"],
+                ca_ttc=row["ca_ttc"],
+                pm_net=row["pm_net"],
+                pm_ttc=row["pm_ttc"],
+                net_total_profit=row["net_total_profit"],
             )
         )
+
+    def _sum_decimal(values: list[Decimal | None]) -> Decimal:
+        total = Decimal("0")
+        for value in values:
+            if value is not None:
+                total += value
+        return total
+
+    def _sum_int(values: list[int | None]) -> int:
+        return sum(v or 0 for v in values)
+
+    def _total_row(label: str, rows: list[dict[str, Any]]) -> BKChannelSales | None:
+        if not rows:
+            return None
+        tac_total = _sum_int([r["tac"] for r in rows])
+        ca_net_total = _sum_decimal([r["ca_net"] for r in rows])
+        ca_ttc_total = _sum_decimal([r["ca_ttc"] for r in rows])
+        net_total_profit = _sum_decimal([r["net_total_profit"] for r in rows])
+        pm_net = (ca_net_total / tac_total) if tac_total else None
+        pm_ttc = (ca_ttc_total / tac_total) if tac_total else None
+        return BKChannelSales(
+            report_id=report.id,
+            channel_label=label,
+            is_total=True,
+            tac=tac_total,
+            ca_net=ca_net_total,
+            ca_ttc=ca_ttc_total,
+            pm_net=pm_net,
+            pm_ttc=pm_ttc,
+            net_total_profit=net_total_profit,
+        )
+
+    def _is_group(label: str, prefix: str) -> bool:
+        return label.upper().startswith(prefix)
+
+    groups = [
+        ("TOTAL CLICK & COLLECT", "CLICK & COLLECT"),
+        ("TOTAL COMPTOIR", "COMPTOIR"),
+        ("TOTAL DRIVE", "DRIVE"),
+        ("TOTAL HOME DELIVERY", "HOME DELIVERY"),
+        ("TOTAL KIOSK", "KIOSK"),
+    ]
+
+    for total_label, prefix in groups:
+        rows = [r for r in channel_rows if _is_group(r["channel_label"], prefix)]
+        total_row = _total_row(total_label, rows)
+        if total_row:
+            db.add(total_row)
+
+    total_all = _total_row("TOTAL", channel_rows)
+    if total_all:
+        db.add(total_all)
+
+    ca_real = _sum_decimal([r["ca_net"] for r in channel_rows])
+    clients = _sum_int([r["tac"] for r in channel_rows])
+    ca_delivery = _sum_decimal(
+        [r["ca_net"] for r in channel_rows if _is_group(r["channel_label"], "HOME DELIVERY")]
+    )
+    client_delivery = _sum_int(
+        [r["tac"] for r in channel_rows if _is_group(r["channel_label"], "HOME DELIVERY")]
+    )
+    ca_click_collect = _sum_decimal(
+        [r["ca_net"] for r in channel_rows if _is_group(r["channel_label"], "CLICK & COLLECT")]
+    )
+    client_click_collect = _sum_int(
+        [r["tac"] for r in channel_rows if _is_group(r["channel_label"], "CLICK & COLLECT")]
+    )
+
+    db.add(
+        BKDailyKpi(
+            report_id=report.id,
+            ca_real=ca_real,
+            clients=clients,
+            ca_delivery=ca_delivery,
+            client_delivery=client_delivery,
+            ca_click_collect=ca_click_collect,
+            client_click_collect=client_click_collect,
+        )
+    )
 
     # consommation par profit (1 ligne)
     rows = _read_csv_rows(consommationparprofit)
@@ -298,9 +407,15 @@ def list_bk_reports_monthly(
     start_date = date(year, month, 1)
     end_date = date(year, month, last_day)
 
+    allowed_restaurants: list[str] | None = None
+    if user.role not in (Role.ADMIN.value, Role.DEV.value):
+        allowed_restaurants = [r.code for r in user.restaurants]
+        if not allowed_restaurants:
+            return []
+
     query = (
         db.query(BKDailyReport)
-        .options(joinedload(BKDailyReport.channel_sales))
+        .options(joinedload(BKDailyReport.channel_sales), joinedload(BKDailyReport.kpi))
         .filter(
             BKDailyReport.report_date >= start_date,
             BKDailyReport.report_date <= end_date,
@@ -312,11 +427,8 @@ def list_bk_reports_monthly(
             BKDailyReport.restaurant_code == restaurant_code.strip().upper()
         )
 
-    if user.role not in (Role.ADMIN.value, Role.DEV.value):
-        allowed = [r.code for r in user.restaurants]
-        if not allowed:
-            return []
-        query = query.filter(BKDailyReport.restaurant_code.in_(allowed))
+    if allowed_restaurants is not None:
+        query = query.filter(BKDailyReport.restaurant_code.in_(allowed_restaurants))
 
     reports = (
         query.order_by(BKDailyReport.report_date.asc(), BKDailyReport.restaurant_code.asc())
@@ -331,11 +443,137 @@ def list_bk_reports_monthly(
         except Exception:
             return 0.0
 
+    def _is_group(label: str, prefix: str) -> bool:
+        return label.upper().startswith(prefix)
+
+    def _calc_report_values(report: BKDailyReport) -> dict[str, Any]:
+        ca_net_total = sum(
+            _safe_float(r.ca_net) for r in report.channel_sales if not r.is_total
+        )
+        ca_ttc_total = sum(
+            _safe_float(r.ca_ttc) for r in report.channel_sales if not r.is_total
+        )
+        tac_total = sum((r.tac or 0) for r in report.channel_sales if not r.is_total)
+        ca_delivery = sum(
+            _safe_float(r.ca_net)
+            for r in report.channel_sales
+            if not r.is_total and _is_group(r.channel_label, "HOME DELIVERY")
+        )
+        client_delivery = sum(
+            (r.tac or 0)
+            for r in report.channel_sales
+            if not r.is_total and _is_group(r.channel_label, "HOME DELIVERY")
+        )
+        ca_click_collect = sum(
+            _safe_float(r.ca_net)
+            for r in report.channel_sales
+            if not r.is_total and _is_group(r.channel_label, "CLICK & COLLECT")
+        )
+        client_click_collect = sum(
+            (r.tac or 0)
+            for r in report.channel_sales
+            if not r.is_total and _is_group(r.channel_label, "CLICK & COLLECT")
+        )
+
+        return {
+            "ca_net_total": ca_net_total,
+            "ca_ttc_total": ca_ttc_total,
+            "tac_total": tac_total,
+            "ca_delivery": ca_delivery,
+            "client_delivery": client_delivery,
+            "ca_click_collect": ca_click_collect,
+            "client_click_collect": client_click_collect,
+        }
+
+    prev_by_key: dict[tuple[str, date], BKDailyReport] = {}
+    if reports:
+        prev_year = year - 1
+        prev_last_day = calendar.monthrange(prev_year, month)[1]
+        prev_start = date(prev_year, month, 1)
+        prev_end = date(prev_year, month, prev_last_day)
+
+        prev_query = (
+            db.query(BKDailyReport)
+            .options(joinedload(BKDailyReport.channel_sales), joinedload(BKDailyReport.kpi))
+            .filter(
+                BKDailyReport.report_date >= prev_start,
+                BKDailyReport.report_date <= prev_end,
+            )
+        )
+
+        if restaurant_code:
+            prev_query = prev_query.filter(
+                BKDailyReport.restaurant_code == restaurant_code.strip().upper()
+            )
+
+        if allowed_restaurants is not None:
+            prev_query = prev_query.filter(BKDailyReport.restaurant_code.in_(allowed_restaurants))
+        else:
+            codes = {r.restaurant_code for r in reports}
+            if codes:
+                prev_query = prev_query.filter(BKDailyReport.restaurant_code.in_(codes))
+
+        prev_reports = prev_query.all()
+        prev_by_key = {(r.restaurant_code, r.report_date): r for r in prev_reports}
+
     payload = []
     for report in reports:
-        ca_net_total = sum(_safe_float(r.ca_net) for r in report.channel_sales)
-        ca_ttc_total = sum(_safe_float(r.ca_ttc) for r in report.channel_sales)
-        tac_total = sum((r.tac or 0) for r in report.channel_sales)
+        values = _calc_report_values(report)
+        ca_net_total = values["ca_net_total"]
+        ca_ttc_total = values["ca_ttc_total"]
+        tac_total = values["tac_total"]
+
+        kpi = report.kpi
+        ca_real = kpi.ca_real if kpi and kpi.ca_real is not None else ca_net_total
+        clients = kpi.clients if kpi and kpi.clients is not None else tac_total
+
+        prev_date = None
+        try:
+            prev_date = date(report.report_date.year - 1, report.report_date.month, report.report_date.day)
+        except ValueError:
+            prev_date = None
+
+        prev_report = prev_by_key.get((report.restaurant_code, prev_date)) if prev_date else None
+        prev_values = _calc_report_values(prev_report) if prev_report else None
+        prev_kpi = prev_report.kpi if prev_report else None
+
+        prev_ca_real = None
+        prev_clients = None
+        prev_ca_delivery = None
+        prev_client_delivery = None
+        prev_ca_click_collect = None
+        prev_client_click_collect = None
+        if prev_report:
+            prev_ca_real = (
+                prev_kpi.ca_real
+                if prev_kpi and prev_kpi.ca_real is not None
+                else prev_values["ca_net_total"]
+            )
+            prev_clients = (
+                prev_kpi.clients
+                if prev_kpi and prev_kpi.clients is not None
+                else prev_values["tac_total"]
+            )
+            prev_ca_delivery = (
+                prev_kpi.ca_delivery
+                if prev_kpi and prev_kpi.ca_delivery is not None
+                else prev_values["ca_delivery"]
+            )
+            prev_client_delivery = (
+                prev_kpi.client_delivery
+                if prev_kpi and prev_kpi.client_delivery is not None
+                else prev_values["client_delivery"]
+            )
+            prev_ca_click_collect = (
+                prev_kpi.ca_click_collect
+                if prev_kpi and prev_kpi.ca_click_collect is not None
+                else prev_values["ca_click_collect"]
+            )
+            prev_client_click_collect = (
+                prev_kpi.client_click_collect
+                if prev_kpi and prev_kpi.client_click_collect is not None
+                else prev_values["client_click_collect"]
+            )
 
         payload.append(
             {
@@ -346,6 +584,23 @@ def list_bk_reports_monthly(
                 "ca_net_total": ca_net_total,
                 "ca_ttc_total": ca_ttc_total,
                 "tac_total": tac_total,
+                "kpi": {
+                    "n1_ht": kpi.n1_ht if kpi and kpi.n1_ht is not None else prev_ca_real,
+                    "var_n1": kpi.var_n1 if kpi else None,
+                    "prev_ht": kpi.prev_ht if kpi else None,
+                    "ca_real": ca_real,
+                    "clients": clients,
+                    "clients_n1": kpi.clients_n1 if kpi and kpi.clients_n1 is not None else prev_clients,
+                    "ca_delivery": kpi.ca_delivery if kpi and kpi.ca_delivery is not None else values["ca_delivery"],
+                    "ca_delivery_n1": kpi.ca_delivery_n1 if kpi and kpi.ca_delivery_n1 is not None else prev_ca_delivery,
+                    "client_delivery": kpi.client_delivery if kpi and kpi.client_delivery is not None else values["client_delivery"],
+                    "client_delivery_n1": kpi.client_delivery_n1 if kpi and kpi.client_delivery_n1 is not None else prev_client_delivery,
+                    "ca_click_collect": kpi.ca_click_collect if kpi and kpi.ca_click_collect is not None else values["ca_click_collect"],
+                    "cnc_n1": kpi.cnc_n1 if kpi and kpi.cnc_n1 is not None else prev_ca_click_collect,
+                    "client_click_collect": kpi.client_click_collect if kpi and kpi.client_click_collect is not None else values["client_click_collect"],
+                    "client_n1": kpi.client_n1 if kpi and kpi.client_n1 is not None else prev_client_click_collect,
+                    "cash_diff": kpi.cash_diff if kpi else None,
+                },
             }
         )
 
@@ -368,9 +623,29 @@ def get_bk_report(
         "restaurant_code": report.restaurant_code,
         "report_date": report.report_date.isoformat(),
         "created_at": report.created_at.isoformat(),
+        "kpi": None
+        if not report.kpi
+        else {
+            "n1_ht": report.kpi.n1_ht,
+            "var_n1": report.kpi.var_n1,
+            "prev_ht": report.kpi.prev_ht,
+            "ca_real": report.kpi.ca_real,
+            "clients": report.kpi.clients,
+            "clients_n1": report.kpi.clients_n1,
+            "ca_delivery": report.kpi.ca_delivery,
+            "ca_delivery_n1": report.kpi.ca_delivery_n1,
+            "client_delivery": report.kpi.client_delivery,
+            "client_delivery_n1": report.kpi.client_delivery_n1,
+            "ca_click_collect": report.kpi.ca_click_collect,
+            "cnc_n1": report.kpi.cnc_n1,
+            "client_click_collect": report.kpi.client_click_collect,
+            "client_n1": report.kpi.client_n1,
+            "cash_diff": report.kpi.cash_diff,
+        },
         "channel_sales": [
             {
                 "channel_label": r.channel_label,
+                "is_total": r.is_total,
                 "tac": r.tac,
                 "ca_net": r.ca_net,
                 "ca_ttc": r.ca_ttc,
@@ -438,3 +713,48 @@ def get_bk_report(
             for r in report.annex_sales
         ],
     }
+
+
+@router.put("/{report_id}/kpi")
+def update_bk_report_kpi(
+    report_id: int,
+    payload: BKDailyKpiUpdate,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles([Role.MANAGER, Role.ADMIN, Role.DEV])),
+):
+    report = db.query(BKDailyReport).filter(BKDailyReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if report.kpi is None:
+        report.kpi = BKDailyKpi(report_id=report.id)
+
+    report.kpi.n1_ht = payload.n1_ht
+    report.kpi.var_n1 = payload.var_n1
+    report.kpi.prev_ht = payload.prev_ht
+    report.kpi.clients_n1 = payload.clients_n1
+    report.kpi.ca_delivery_n1 = payload.ca_delivery_n1
+    report.kpi.client_delivery_n1 = payload.client_delivery_n1
+    report.kpi.cnc_n1 = payload.cnc_n1
+    report.kpi.client_n1 = payload.client_n1
+    report.kpi.cash_diff = payload.cash_diff
+
+    db.add(report)
+    db.commit()
+
+    return {"status": "ok"}
+
+
+@router.delete("/{report_id}")
+def delete_bk_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles([Role.ADMIN, Role.DEV])),
+):
+    report = db.query(BKDailyReport).filter(BKDailyReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    db.delete(report)
+    db.commit()
+    return {"status": "deleted"}

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, EmailStr, Field
 from typing import List
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import get_db
 from app.api.auth_deps import require_roles
@@ -61,6 +61,13 @@ class RestaurantOut(BaseModel):
     code: str
     name: str
 
+class UserWithRestaurantsOut(BaseModel):
+    id: int
+    email: str
+    role: str
+    is_active: bool
+    restaurants: list[RestaurantOut]
+
 class RestaurantCreateIn(BaseModel):
     code: str = Field(min_length=2)
     name: str = Field(min_length=2)
@@ -76,6 +83,30 @@ def list_users(
     users = db.query(User).order_by(User.id.asc()).all()
     return [
         UserOut(id=u.id, email=u.email, role=u.role, is_active=u.is_active)
+        for u in users
+    ]
+
+@router.get("/users-with-restaurants", response_model=List[UserWithRestaurantsOut])
+def list_users_with_restaurants(
+    db: Session = Depends(get_db),
+    _user=Depends(require_roles([Role.DEV])),
+):
+    users = (
+        db.query(User)
+        .options(joinedload(User.restaurants))
+        .order_by(User.id.asc())
+        .all()
+    )
+    return [
+        UserWithRestaurantsOut(
+            id=u.id,
+            email=u.email,
+            role=u.role,
+            is_active=u.is_active,
+            restaurants=[
+                RestaurantOut(id=r.id, code=r.code, name=r.name) for r in u.restaurants
+            ],
+        )
         for u in users
     ]
 

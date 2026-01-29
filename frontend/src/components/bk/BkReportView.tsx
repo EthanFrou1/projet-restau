@@ -27,6 +27,66 @@ export function BkReportView({ report }: Props) {
     );
   }
 
+  const isTotalRow = (label: string, flag?: boolean) =>
+    !!flag || label.trim().toUpperCase().startsWith("TOTAL");
+
+  const groups = [
+    { total: "TOTAL CLICK & COLLECT", match: (label: string) => label.toUpperCase().startsWith("CLICK & COLLECT") },
+    { total: "TOTAL COMPTOIR", match: (label: string) => label.toUpperCase().startsWith("COMPTOIR") },
+    { total: "TOTAL DRIVE", match: (label: string) => label.toUpperCase().startsWith("DRIVE") },
+    { total: "TOTAL HOME DELIVERY", match: (label: string) => label.toUpperCase().startsWith("HOME DELIVERY") },
+    { total: "TOTAL KIOSK", match: (label: string) => label.toUpperCase().startsWith("KIOSK") },
+  ];
+
+  const baseRows = report.channel_sales.filter(
+    (row) => !isTotalRow(row.channel_label, row.is_total)
+  );
+  const totalRows = report.channel_sales.filter((row) =>
+    isTotalRow(row.channel_label, row.is_total)
+  );
+  const totalByLabel = new Map(
+    totalRows.map((row) => [row.channel_label.trim().toUpperCase(), row])
+  );
+
+  const orderedRows: typeof report.channel_sales = [];
+  const usedBase = new Set<number>();
+  const usedTotals = new Set<string>();
+
+  groups.forEach((group) => {
+    baseRows.forEach((row, idx) => {
+      if (usedBase.has(idx)) return;
+      if (group.match(row.channel_label)) {
+        orderedRows.push(row);
+        usedBase.add(idx);
+      }
+    });
+
+    const totalRow = totalByLabel.get(group.total);
+    if (totalRow) {
+      orderedRows.push(totalRow);
+      usedTotals.add(group.total);
+    }
+  });
+
+  baseRows.forEach((row, idx) => {
+    if (!usedBase.has(idx)) {
+      orderedRows.push(row);
+    }
+  });
+
+  const totalOverall = totalByLabel.get("TOTAL");
+  if (totalOverall) {
+    orderedRows.push(totalOverall);
+    usedTotals.add("TOTAL");
+  }
+
+  totalRows.forEach((row) => {
+    const key = row.channel_label.trim().toUpperCase();
+    if (!usedTotals.has(key) && key !== "TOTAL") {
+      orderedRows.push(row);
+    }
+  });
+
   return (
     <Card>
       <CardHeader>
@@ -52,16 +112,22 @@ export function BkReportView({ report }: Props) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {report.channel_sales.map((r) => (
-                  <TableRow key={r.channel_label}>
-                    <TableCell className="font-mono text-xs">{r.channel_label}</TableCell>
-                    <TableCell>{r.tac ?? "—"}</TableCell>
-                    <TableCell>{r.ca_net ?? "—"}</TableCell>
-                    <TableCell>{r.ca_ttc ?? "—"}</TableCell>
-                    <TableCell>{r.pm_net ?? "—"}</TableCell>
-                    <TableCell>{r.pm_ttc ?? "—"}</TableCell>
-                  </TableRow>
-                ))}
+                {orderedRows.map((r, index) => {
+                  const total = isTotalRow(r.channel_label, r.is_total);
+                  return (
+                    <TableRow
+                      key={`${r.channel_label}-${index}`}
+                      className={total ? "bg-muted/30 font-medium" : ""}
+                    >
+                      <TableCell className="font-mono text-xs">{r.channel_label}</TableCell>
+                      <TableCell>{r.tac ?? "—"}</TableCell>
+                      <TableCell>{r.ca_net ?? "—"}</TableCell>
+                      <TableCell>{r.ca_ttc ?? "—"}</TableCell>
+                      <TableCell>{r.pm_net ?? "—"}</TableCell>
+                      <TableCell>{r.pm_ttc ?? "—"}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

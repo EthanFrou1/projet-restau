@@ -11,6 +11,7 @@ from app.models.bk_report import (
     BKRemises,
     BKTvaSummary,
     BKAnnexSale,
+    BKDailyKpi,
 )
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "BKRemises",
     "BKTvaSummary",
     "BKAnnexSale",
+    "BKDailyKpi",
 ]

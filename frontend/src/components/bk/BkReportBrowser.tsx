@@ -24,6 +24,7 @@ type ReportListItem = {
 
 type Props = {
   restaurants: Restaurant[];
+  canDelete?: boolean;
 };
 
 function toIsoDate(value: Date) {
@@ -38,7 +39,7 @@ function formatDateTime(value: string) {
   return parsed.toLocaleString("fr-FR");
 }
 
-export function BkReportBrowser({ restaurants }: Props) {
+export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
   const today = useMemo(() => toIsoDate(new Date()), []);
   const defaultStart = useMemo(() => {
     const d = new Date();
@@ -55,6 +56,7 @@ export function BkReportBrowser({ restaurants }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedReport, setSelectedReport] = useState<BKReport | null>(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   const canSelectRestaurant = restaurants.length > 1;
   const fixedRestaurantCode = restaurants.length === 1 ? restaurants[0].code : "";
@@ -97,6 +99,27 @@ export function BkReportBrowser({ restaurants }: Props) {
     }
   }
 
+  async function handleDelete(reportId: number) {
+    const ok = confirm(`Supprimer l'import #${reportId} ?`);
+    if (!ok) return;
+    setDeletingId(reportId);
+    setErr(null);
+    try {
+      await apiFetch<{ status: string }>(`/reports/bk/${reportId}`, {
+        method: "DELETE",
+      });
+      if (selectedId === reportId) {
+        setSelectedId(null);
+        setSelectedReport(null);
+      }
+      await loadReports();
+    } catch (e: any) {
+      setErr(e?.message ?? "Erreur suppression rapport");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   useEffect(() => {
     if (fixedRestaurantCode && !restaurantCode) {
       setRestaurantCode(fixedRestaurantCode);
@@ -106,7 +129,7 @@ export function BkReportBrowser({ restaurants }: Props) {
   useEffect(() => {
     loadReports();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [startDate, endDate, finalRestaurantCode]);
 
   return (
     <Card>
@@ -147,9 +170,7 @@ export function BkReportBrowser({ restaurants }: Props) {
             )}
           </div>
           <div className="flex items-end">
-            <Button onClick={loadReports} disabled={loading}>
-              {loading ? "Chargement..." : "Charger"}
-            </Button>
+            {loading && <div className="text-xs text-muted-foreground">Chargement...</div>}
           </div>
         </div>
 
@@ -162,7 +183,7 @@ export function BkReportBrowser({ restaurants }: Props) {
                 <TableHead>Date</TableHead>
                 <TableHead>Restaurant</TableHead>
                 <TableHead>Importe le</TableHead>
-                <TableHead className="w-[140px] text-right">Action</TableHead>
+                <TableHead className="w-[200px] text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -174,23 +195,35 @@ export function BkReportBrowser({ restaurants }: Props) {
                 </TableRow>
               ) : (
                 items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-mono text-xs">{item.report_date}</TableCell>
-                    <TableCell className="font-mono text-xs">{item.restaurant_code}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {formatDateTime(item.created_at)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant={selectedId === item.id ? "secondary" : "outline"}
-                        size="sm"
-                        onClick={() => loadReportDetails(item.id)}
-                      >
-                        {selectedId === item.id && selectedLoading ? "Chargement..." : "Voir"}
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                    <TableRow key={item.id}>
+                      <TableCell className="font-mono text-xs">{item.report_date}</TableCell>
+                      <TableCell className="font-mono text-xs">{item.restaurant_code}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {formatDateTime(item.created_at)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant={selectedId === item.id ? "secondary" : "outline"}
+                            size="sm"
+                            onClick={() => loadReportDetails(item.id)}
+                          >
+                            {selectedId === item.id && selectedLoading ? "Chargement..." : "Voir"}
+                          </Button>
+                          {canDelete && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={deletingId === item.id}
+                              onClick={() => handleDelete(item.id)}
+                            >
+                              {deletingId === item.id ? "Suppression..." : "Supprimer"}
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
               )}
             </TableBody>
           </Table>

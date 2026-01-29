@@ -4,8 +4,26 @@ export type BKReport = {
   restaurant_code: string;
   report_date: string;
   created_at: string;
+  kpi: {
+    n1_ht: string | null;
+    var_n1: string | null;
+    prev_ht: string | null;
+    ca_real: string | null;
+    clients: number | null;
+    clients_n1: number | null;
+    ca_delivery: string | null;
+    ca_delivery_n1: string | null;
+    client_delivery: number | null;
+    client_delivery_n1: number | null;
+    ca_click_collect: string | null;
+    cnc_n1: string | null;
+    client_click_collect: number | null;
+    client_n1: number | null;
+    cash_diff: string | null;
+  } | null;
   channel_sales: Array<{
     channel_label: string;
+    is_total?: boolean;
     tac: number | null;
     ca_net: string | null;
     ca_ttc: string | null;

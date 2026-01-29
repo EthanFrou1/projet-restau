@@ -24,3 +24,15 @@ export async function setUserRestaurants(userId: number, restaurantCodes: string
     }
   );
 }
+
+export async function listUsersWithRestaurants() {
+  return apiFetch<
+    Array<{
+      id: number;
+      email: string;
+      role: string;
+      is_active: boolean;
+      restaurants: Array<{ id: number; code: string; name: string }>;
+    }>
+  >("/debug/users-with-restaurants");
+}

@@ -10,6 +10,7 @@ import { createUser } from "@/lib/auth";
 import { logout, listUsers, deleteUser } from "@/lib/auth";
 import { UserRestaurantAssign } from "@/components/admin/UserRestaurantAssign";
 import { RestaurantManager } from "@/components/admin/RestaurantManager";
+import { listUsersWithRestaurants, setUserRestaurants } from "@/lib/restaurants";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
@@ -32,6 +33,17 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
   const [showPw, setShowPw] = useState(false);
   const [users, setUsers] = useState<Array<{id:number; email:string; role:string; is_active:boolean}>>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [assocUsers, setAssocUsers] = useState<
+    Array<{
+      id: number;
+      email: string;
+      role: string;
+      is_active: boolean;
+      restaurants: Array<{ id: number; code: string; name: string }>;
+    }>
+  >([]);
+  const [assocLoading, setAssocLoading] = useState(false);
+  const [assocMsg, setAssocMsg] = useState<string | null>(null);
 
   // filtres audit
   const [qAction, setQAction] = useState("");
@@ -77,6 +89,19 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
         }
     }
 
+  async function loadUserRestaurants() {
+    setAssocLoading(true);
+    setAssocMsg(null);
+    try {
+      const data = await listUsersWithRestaurants();
+      setAssocUsers(data);
+    } catch (e: any) {
+      setAssocMsg(e?.message ?? "Erreur chargement associations");
+    } finally {
+      setAssocLoading(false);
+    }
+  }
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -89,6 +114,20 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (me?.role === "DEV") {
+      loadUserRestaurants();
+    }
+  }, [me?.role]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      loadAudit();
+    }, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qAction, qActor]);
 
   const roleBadge = useMemo(() => {
     if (!me) return null;
@@ -108,7 +147,7 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                 }
             }}
         />
-        <div className="mx-auto max-w-6xl p-6 space-y-6">
+        <div className="mx-auto p-6 space-y-6">
             <div className="flex items-center justify-between">
             <div className="space-y-1">
                 <h1 className="text-3xl font-semibold tracking-tight">Projet Restau — Dev Panel</h1>
@@ -371,6 +410,89 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                             </CardContent>
                         </Card>
                         <RestaurantManager />
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base">Associations utilisateurs → restaurants</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <Button variant="outline" onClick={loadUserRestaurants} disabled={assocLoading}>
+                                      {assocLoading ? "Chargement…" : "Rafraîchir"}
+                                    </Button>
+                                    {assocMsg && <div className="text-sm text-destructive">{assocMsg}</div>}
+                                </div>
+
+                                <div className="rounded-md border overflow-hidden">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Utilisateur</TableHead>
+                                                <TableHead>Rôle</TableHead>
+                                                <TableHead>Restaurants</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {assocUsers.length === 0 ? (
+                                                <TableRow>
+                                                    <TableCell colSpan={3} className="text-sm text-muted-foreground">
+                                                        Aucune association trouvée.
+                                                    </TableCell>
+                                                </TableRow>
+                                            ) : (
+                                                assocUsers.map((u) => (
+                                                    <TableRow key={u.id}>
+                                                        <TableCell className="font-mono text-xs">{u.email}</TableCell>
+                                                        <TableCell>{u.role}</TableCell>
+                                                        <TableCell>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {u.restaurants.length === 0 ? (
+                                                                    <span className="text-xs text-muted-foreground">
+                                                                        Aucun
+                                                                    </span>
+                                                                ) : (
+                                                                    u.restaurants.map((r) => (
+                                                                        <Button
+                                                                            key={`${u.id}-${r.code}`}
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            onClick={async () => {
+                                                                                if (u.restaurants.length <= 1) {
+                                                                                    setAssocMsg(
+                                                                                        "Impossible de retirer le dernier restaurant. Ajoute-en un autre d'abord."
+                                                                                    );
+                                                                                    return;
+                                                                                }
+                                                                                setAssocMsg(null);
+                                                                                const nextCodes = u.restaurants
+                                                                                    .filter((x) => x.code !== r.code)
+                                                                                    .map((x) => x.code);
+                                                                                try {
+                                                                                    await setUserRestaurants(u.id, nextCodes);
+                                                                                    await loadUserRestaurants();
+                                                                                } catch (e: any) {
+                                                                                    setAssocMsg(e?.message ?? "Erreur suppression association");
+                                                                                }
+                                                                            }}
+                                                                        >
+                                                                            {r.code} ×
+                                                                        </Button>
+                                                                    ))
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                    Clique sur un restaurant pour le retirer. Pour ajouter, utilise le bloc ci-dessous.
+                                </div>
+                            </CardContent>
+                        </Card>
+
                         <UserRestaurantAssign users={users} />
                     </div>
                 )}
@@ -409,7 +531,6 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                         <Input value={qActor} onChange={(e) => setQActor(e.target.value)} placeholder="ex: dev@restau.com" />
                     </div>
                     <div className="flex items-end gap-2">
-                        <Button onClick={loadAudit}>Recharger</Button>
                         <Button
                         variant="secondary"
                         onClick={() => { setQAction(""); setQActor(""); }}

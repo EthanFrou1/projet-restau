@@ -2,19 +2,24 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { listRestaurants, setUserRestaurants } from "@/lib/restaurants";
+import { listRestaurants, listUsersWithRestaurants, setUserRestaurants } from "@/lib/restaurants";
 
 type UserRow = { id: number; email: string; role: string; is_active: boolean };
 type Restaurant = { id: number; code: string; name: string };
 
 type Props = {
   users: UserRow[];
+  onSaved?: (userId: number, restaurantCodes: string[]) => void;
 };
 
-export function UserRestaurantAssign({ users }: Props) {
+export function UserRestaurantAssign({ users, onSaved }: Props) {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<number | "">("");
   const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
+  const [userRestaurants, setUserRestaurantsMap] = useState<
+    Record<number, string[]>
+  >({});
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -35,6 +40,32 @@ export function UserRestaurantAssign({ users }: Props) {
     loadRestaurants();
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      setLoadingUsers(true);
+      try {
+        const data = await listUsersWithRestaurants();
+        const map: Record<number, string[]> = {};
+        data.forEach((u) => {
+          map[u.id] = u.restaurants.map((r) => r.code);
+        });
+        setUserRestaurantsMap(map);
+      } catch (e: any) {
+        setMsg(`❌ ${e?.message ?? "Erreur"}`);
+      } finally {
+        setLoadingUsers(false);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedUserId) {
+      setSelectedCodes([]);
+      return;
+    }
+    setSelectedCodes(userRestaurants[selectedUserId] || []);
+  }, [selectedUserId, userRestaurants]);
+
   async function save() {
     setMsg(null);
     if (!selectedUserId) {
@@ -47,6 +78,11 @@ export function UserRestaurantAssign({ users }: Props) {
     }
     try {
       await setUserRestaurants(Number(selectedUserId), selectedCodes);
+      setUserRestaurantsMap((prev) => ({
+        ...prev,
+        [Number(selectedUserId)]: selectedCodes,
+      }));
+      onSaved?.(Number(selectedUserId), selectedCodes);
       setMsg("✅ Associations mises a jour.");
     } catch (e: any) {
       setMsg(`❌ ${e?.message ?? "Erreur"}`);
@@ -65,6 +101,7 @@ export function UserRestaurantAssign({ users }: Props) {
             className="w-full rounded-md border bg-background px-3 py-2 text-sm"
             value={selectedUserId}
             onChange={(e) => setSelectedUserId(e.target.value ? Number(e.target.value) : "")}
+            disabled={loadingUsers}
           >
             <option value="">Selectionner...</option>
             {users.map((u) => (
@@ -93,9 +130,7 @@ export function UserRestaurantAssign({ users }: Props) {
                     variant={active ? "default" : "outline"}
                     onClick={() => {
                       setSelectedCodes((prev) =>
-                        prev.includes(r.code)
-                          ? prev.filter((c) => c !== r.code)
-                          : [...prev, r.code]
+                        prev.includes(r.code) ? prev : [...prev, r.code]
                       );
                     }}
                   >
@@ -143,6 +178,9 @@ export function UserRestaurantAssign({ users }: Props) {
 
         <div className="flex gap-2">
           <Button onClick={save}>Enregistrer</Button>
+          <div className="text-xs text-muted-foreground">
+            Les restaurants existants sont pré-sélectionnés.
+          </div>
         </div>
         {msg && <div className="text-sm whitespace-pre-wrap">{msg}</div>}
       </CardContent>

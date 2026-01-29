@@ -11,7 +11,7 @@ type Props = {
 export function TopBar({ email, role, onLogout }: Props) {
   return (
     <div className="border-b bg-background">
-      <div className="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between">
+      <div className="mx-auto px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-semibold">Projet Restau</h1>
           <Badge variant="secondary">{role}</Badge>
@@ -19,7 +19,7 @@ export function TopBar({ email, role, onLogout }: Props) {
 
         <div className="flex items-center gap-3">
             <span className="text-sm text-muted-foreground">{email}</span>
-            <Button variant="outline" size="sm" onClick={onLogout} disabled={!email}>
+            <Button variant="outline" size="sm" onClick={onLogout}>
                 Logout
             </Button>
         </div>

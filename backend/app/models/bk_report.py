@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -40,6 +40,9 @@ class BKDailyReport(Base):
     annex_sales: Mapped[list["BKAnnexSale"]] = relationship(
         back_populates="report", cascade="all, delete-orphan"
     )
+    kpi: Mapped["BKDailyKpi"] = relationship(
+        back_populates="report", cascade="all, delete-orphan", uselist=False
+    )
 
 
 class BKChannelSales(Base):
@@ -48,6 +51,7 @@ class BKChannelSales(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     report_id: Mapped[int] = mapped_column(ForeignKey("bk_daily_reports.id"), index=True)
     channel_label: Mapped[str] = mapped_column(String(120), nullable=False)
+    is_total: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     tac: Mapped[int] = mapped_column(Integer, nullable=True)
     ca_net: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
     ca_ttc: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
@@ -155,3 +159,30 @@ class BKAnnexSale(Base):
     montant_ttc: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
 
     report: Mapped[BKDailyReport] = relationship(back_populates="annex_sales")
+
+
+class BKDailyKpi(Base):
+    __tablename__ = "bk_daily_kpis"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    report_id: Mapped[int] = mapped_column(
+        ForeignKey("bk_daily_reports.id"), index=True, unique=True
+    )
+
+    n1_ht: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    var_n1: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    prev_ht: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    ca_real: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    clients: Mapped[int] = mapped_column(Integer, nullable=True)
+    clients_n1: Mapped[int] = mapped_column(Integer, nullable=True)
+    ca_delivery: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    ca_delivery_n1: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    client_delivery: Mapped[int] = mapped_column(Integer, nullable=True)
+    client_delivery_n1: Mapped[int] = mapped_column(Integer, nullable=True)
+    ca_click_collect: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    cnc_n1: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    client_click_collect: Mapped[int] = mapped_column(Integer, nullable=True)
+    client_n1: Mapped[int] = mapped_column(Integer, nullable=True)
+    cash_diff: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+
+    report: Mapped[BKDailyReport] = relationship(back_populates="kpi")
