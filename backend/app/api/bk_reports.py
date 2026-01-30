@@ -99,6 +99,9 @@ def upload_bk_report(
     db: Session = Depends(get_db),
     _user=Depends(require_roles([Role.MANAGER, Role.ADMIN, Role.DEV])),
 ):
+    if report_date > date.today():
+        raise HTTPException(status_code=400, detail="Report date cannot be in the future.")
+
     existing = (
         db.query(BKDailyReport)
         .filter(
@@ -749,11 +752,16 @@ def update_bk_report_kpi(
 def delete_bk_report(
     report_id: int,
     db: Session = Depends(get_db),
-    _user=Depends(require_roles([Role.ADMIN, Role.DEV])),
+    user=Depends(require_roles([Role.ADMIN, Role.DEV, Role.MANAGER])),
 ):
     report = db.query(BKDailyReport).filter(BKDailyReport.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+
+    if user.role == Role.MANAGER.value:
+        allowed = {r.code for r in user.restaurants}
+        if report.restaurant_code not in allowed:
+            raise HTTPException(status_code=403, detail="Not allowed for this restaurant")
 
     db.delete(report)
     db.commit()

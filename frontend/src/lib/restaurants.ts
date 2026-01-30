@@ -32,6 +32,8 @@ export async function listUsersWithRestaurants() {
       email: string;
       role: string;
       is_active: boolean;
+      first_name?: string | null;
+      last_name?: string | null;
       restaurants: Array<{ id: number; code: string; name: string }>;
     }>
   >("/debug/users-with-restaurants");

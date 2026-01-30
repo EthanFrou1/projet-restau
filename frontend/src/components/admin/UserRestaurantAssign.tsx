@@ -4,7 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { listRestaurants, listUsersWithRestaurants, setUserRestaurants } from "@/lib/restaurants";
 
-type UserRow = { id: number; email: string; role: string; is_active: boolean };
+type UserRow = {
+  id: number;
+  email: string;
+  role: string;
+  is_active: boolean;
+  first_name?: string | null;
+  last_name?: string | null;
+};
 type Restaurant = { id: number; code: string; name: string };
 
 type Props = {
@@ -106,7 +113,10 @@ export function UserRestaurantAssign({ users, onSaved }: Props) {
             <option value="">Selectionner...</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.email} ({u.role})
+                {(u.first_name || u.last_name
+                  ? `${u.first_name || ""} ${u.last_name || ""}`.trim()
+                  : u.email)}{" "}
+                ({u.role})
               </option>
             ))}
           </select>

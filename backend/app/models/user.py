@@ -12,6 +12,8 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False, default=Role.READONLY.value)
+    first_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
     restaurants: Mapped[list["Restaurant"]] = relationship(
         secondary=user_restaurants,

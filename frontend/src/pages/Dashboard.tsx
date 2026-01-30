@@ -15,6 +15,7 @@ import type { BKReport } from "@/components/bk/types";
 import { getMyRestaurants, listUsersWithRestaurants, setUserRestaurants } from "@/lib/restaurants";
 import { RestaurantManager } from "@/components/admin/RestaurantManager";
 import { UserRestaurantAssign } from "@/components/admin/UserRestaurantAssign";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Table,
   TableBody,
@@ -24,7 +25,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-type Me = { id: number; email: string; role: string; is_active: boolean };
+type Me = {
+  id: number;
+  email: string;
+  role: string;
+  is_active: boolean;
+  first_name?: string | null;
+  last_name?: string | null;
+};
 type MonthlyItem = {
   id: number;
   restaurant_code: string;
@@ -53,6 +61,12 @@ type MonthlyItem = {
 };
 
 type Restaurant = { id: number; code: string; name: string };
+type ReportListItem = {
+  id: number;
+  restaurant_code: string;
+  report_date: string;
+  created_at: string;
+};
 
 const moneyFmt = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
 const compactMoneyFmt = new Intl.NumberFormat("fr-FR", {
@@ -68,26 +82,45 @@ const pctFmt = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 1,
 });
 
+function toIsoDate(value: Date) {
+  const offset = value.getTimezoneOffset();
+  const local = new Date(value.getTime() - offset * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
 export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void }) {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [report, setReport] = useState<BKReport | null>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [devUsers, setDevUsers] = useState<Array<{id:number; email:string; role:string; is_active:boolean}>>([]);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [devUsers, setDevUsers] = useState<Array<{
+    id: number;
+    email: string;
+    role: string;
+    is_active: boolean;
+    first_name?: string | null;
+    last_name?: string | null;
+  }>>([]);
   const [devUsersLoading, setDevUsersLoading] = useState(false);
   const [devUsersPage, setDevUsersPage] = useState(1);
+  const [newFirstName, setNewFirstName] = useState("");
+  const [newLastName, setNewLastName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newPassword2, setNewPassword2] = useState("");
   const [newRole, setNewRole] = useState<"ADMIN" | "MANAGER" | "READONLY" | "DEV">("READONLY");
   const [createMsg, setCreateMsg] = useState<string | null>(null);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<{ id: number; label: string } | null>(null);
   const [assocUsers, setAssocUsers] = useState<
     Array<{
       id: number;
       email: string;
       role: string;
       is_active: boolean;
+      first_name?: string | null;
+      last_name?: string | null;
       restaurants: Array<{ id: number; code: string; name: string }>;
     }>
   >([]);
@@ -99,6 +132,13 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
   const [dashItems, setDashItems] = useState<MonthlyItem[]>([]);
   const [dashLoading, setDashLoading] = useState(false);
   const [dashErr, setDashErr] = useState<string | null>(null);
+  const [dailyStatus, setDailyStatus] = useState<{
+    loading: boolean;
+    missing: Restaurant[];
+    date: string | null;
+    error: string | null;
+    noRestaurants: boolean;
+  }>({ loading: false, missing: [], date: null, error: null, noRestaurants: false });
 
   async function loadMe() {
     setErr(null);
@@ -126,10 +166,22 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
     return <Badge variant="secondary">{me.role}</Badge>;
   }, [me]);
 
+  const displayName = useMemo(() => {
+    if (!me) return "";
+    const full = `${me.first_name || ""} ${me.last_name || ""}`.trim();
+    return full || me.email;
+  }, [me]);
+
   const isDev = me?.role === "DEV";
+  const canSeeDailyBanner = me?.role === "MANAGER" || me?.role === "DEV";
   const canViewGlobalBk =
     me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV" || me?.role === "READONLY";
   const canDeleteBk = me?.role === "ADMIN" || me?.role === "DEV";
+  const canReplaceImport = me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV";
+  const isWideTab = activeTab === "bk-global" || activeTab === "bk-monthly";
+  const containerClass = isWideTab
+    ? "mx-auto p-6 space-y-6 max-w-none"
+    : "mx-auto p-6 space-y-6 max-w-6xl";
   const pageSize = 10;
   const totalUserPages = Math.max(1, Math.ceil(devUsers.length / pageSize));
   const usersPageStart = (devUsersPage - 1) * pageSize;
@@ -211,6 +263,45 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
       }
     })();
   }, [dashYear, dashMonth, dashRestaurant]);
+
+  useEffect(() => {
+    if (!canSeeDailyBanner) return;
+    if (!restaurants) return;
+    const today = toIsoDate(new Date());
+
+    (async () => {
+      if (restaurants.length === 0) {
+        setDailyStatus({
+          loading: false,
+          missing: [],
+          date: today,
+          error: null,
+          noRestaurants: true,
+        });
+        return;
+      }
+      setDailyStatus((prev) => ({ ...prev, loading: true, error: null, date: today }));
+      try {
+        const params = new URLSearchParams();
+        params.set("start_date", today);
+        params.set("end_date", today);
+        const data = await apiFetch<ReportListItem[]>(
+          `/reports/bk?${params.toString()}`
+        );
+        const reported = new Set(data.map((r) => r.restaurant_code));
+        const missing = restaurants.filter((r) => !reported.has(r.code));
+        setDailyStatus({ loading: false, missing, date: today, error: null, noRestaurants: false });
+      } catch (e: any) {
+        setDailyStatus({
+          loading: false,
+          missing: [],
+          date: today,
+          error: e?.message ?? "Erreur chargement import du jour",
+          noRestaurants: false,
+        });
+      }
+    })();
+  }, [canSeeDailyBanner, restaurants]);
 
   const monthLabel = useMemo(() => {
     const monthIdx = Number(dashMonth) - 1;
@@ -313,8 +404,16 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
       return;
     }
     try {
-      const res = await createUser({ email, password: newPassword, role: newRole });
+      const res = await createUser({
+        email,
+        password: newPassword,
+        role: newRole,
+        first_name: newFirstName.trim() || null,
+        last_name: newLastName.trim() || null,
+      });
       setCreateMsg(`✅ Utilisateur créé: ${res.email} (${res.role})`);
+      setNewFirstName("");
+      setNewLastName("");
       setNewEmail("");
       setNewPassword("");
       setNewPassword2("");
@@ -339,12 +438,30 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
         }}
       />
 
-      <div className="mx-auto p-6 space-y-6">
+      <div className={containerClass}>
+        <ConfirmDialog
+          open={Boolean(confirmDeleteUser)}
+          title="Supprimer cet utilisateur ?"
+          description={
+            confirmDeleteUser
+              ? `Confirmer la suppression de ${confirmDeleteUser.label}. Cette action est irreversible.`
+              : undefined
+          }
+          confirmLabel="Supprimer"
+          onCancel={() => setConfirmDeleteUser(null)}
+          onConfirm={async () => {
+            if (!confirmDeleteUser) return;
+            const userId = confirmDeleteUser.id;
+            setConfirmDeleteUser(null);
+            await deleteUser(userId);
+            await loadDevUsers();
+          }}
+        />
         <div className="flex items-center justify-between">
           <div className="space-y-1">
             <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
             <p className="text-sm text-muted-foreground">
-              Bienvenue ! Ici tu retrouves ton accès et tes données quotidiennes.
+              {displayName ? `Bonjour ${displayName} ! ` : ""}Ici tu retrouves ton accès et tes données quotidiennes.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -372,7 +489,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
           </Card>
         )}
 
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList>
             <TabsTrigger value="overview">Dashboard</TabsTrigger>
             <TabsTrigger value="data">Mes données</TabsTrigger>
@@ -382,6 +499,46 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
+            {canSeeDailyBanner && (
+              <Card className="border-amber-200 bg-amber-50/60">
+                <CardContent className="pt-4 space-y-2">
+                  {dailyStatus.loading ? (
+                    <div className="text-sm text-muted-foreground">
+                      Vérification de l'import du jour...
+                    </div>
+                  ) : dailyStatus.error ? (
+                    <div className="text-sm text-destructive">
+                      {dailyStatus.error}
+                    </div>
+                  ) : dailyStatus.noRestaurants ? (
+                    <div className="text-sm text-muted-foreground">
+                      Aucun restaurant associé à ton compte.
+                    </div>
+                  ) : dailyStatus.missing.length === 0 ? (
+                    <div className="text-sm">
+                      ✅ Import du jour OK pour tous les restaurants
+                      {dailyStatus.date ? ` (${dailyStatus.date})` : ""}.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div className="text-sm">
+                        ⚠️ Import du jour manquant
+                        {dailyStatus.date ? ` (${dailyStatus.date})` : ""} pour :{" "}
+                        <span className="font-medium">
+                          {dailyStatus.missing.map((r) => r.code).join(", ")}
+                        </span>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveTab("data")}
+                      >
+                        Importer maintenant
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
             <Card>
               <CardHeader>
                 <CardTitle>Tableau de bord BK</CardTitle>
@@ -649,6 +806,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
           <TabsContent value="data" className="space-y-4">
             <BkReportUploader
               restaurants={restaurants}
+              canReplace={canReplaceImport}
               onUploaded={(r) => setReport(r)}
             />
 
@@ -674,7 +832,25 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                 <CardTitle className="text-base">Utilisateurs (DEV)</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="grid gap-3 md:grid-cols-5">
+                <div className="grid gap-3 md:grid-cols-7">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Prénom</div>
+                    <input
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                      value={newFirstName}
+                      onChange={(e) => setNewFirstName(e.target.value)}
+                      placeholder="Jean"
+                    />
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Nom</div>
+                    <input
+                      className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                      value={newLastName}
+                      onChange={(e) => setNewLastName(e.target.value)}
+                      placeholder="Dupont"
+                    />
+                  </div>
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Email</div>
                     <input
@@ -733,6 +909,8 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[80px]">ID</TableHead>
+                        <TableHead className="w-[140px]">Prénom</TableHead>
+                        <TableHead className="w-[140px]">Nom</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead className="w-[120px]">Role</TableHead>
                         <TableHead className="w-[120px]">Active</TableHead>
@@ -742,7 +920,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                     <TableBody>
                       {devUsers.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                          <TableCell colSpan={7} className="text-sm text-muted-foreground">
                             Aucun user charge.
                           </TableCell>
                         </TableRow>
@@ -750,6 +928,8 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                         usersPageItems.map((u) => (
                           <TableRow key={u.id}>
                             <TableCell>{u.id}</TableCell>
+                            <TableCell>{u.first_name || "—"}</TableCell>
+                            <TableCell>{u.last_name || "—"}</TableCell>
                             <TableCell className="font-mono text-xs">{u.email}</TableCell>
                             <TableCell>{u.role}</TableCell>
                             <TableCell>{u.is_active ? "yes" : "no"}</TableCell>
@@ -759,10 +939,10 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                                 size="sm"
                                 disabled={u.id === me?.id || u.role === "DEV"}
                                 onClick={async () => {
-                                  const ok = confirm(`Supprimer ${u.email} (id=${u.id}) ?`);
-                                  if (!ok) return;
-                                  await deleteUser(u.id);
-                                  await loadDevUsers();
+                                  setConfirmDeleteUser({
+                                    id: u.id,
+                                    label: `${u.email} (id=${u.id})`,
+                                  });
                                 }}
                               >
                                 Delete
@@ -832,7 +1012,11 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                       ) : (
                         assocUsers.map((u) => (
                           <TableRow key={u.id}>
-                            <TableCell className="font-mono text-xs">{u.email}</TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {u.first_name || u.last_name
+                                ? `${u.first_name || ""} ${u.last_name || ""}`.trim()
+                                : u.email}
+                            </TableCell>
                             <TableCell>{u.role}</TableCell>
                             <TableCell>
                               <div className="flex flex-wrap gap-2">

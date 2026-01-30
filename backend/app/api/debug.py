@@ -18,6 +18,8 @@ class CreateUserRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
     role: Role
+    first_name: str | None = None
+    last_name: str | None = None
 
 @router.post("/create-user")
 def create_user(
@@ -31,11 +33,16 @@ def create_user(
     if existing:
         raise HTTPException(status_code=400, detail="Email already exists")
 
+    first_name = payload.first_name.strip() if payload.first_name else None
+    last_name = payload.last_name.strip() if payload.last_name else None
+
     user = User(
         email=email,
         hashed_password=hash_password(payload.password),
         is_active=True,
         role=payload.role.value,
+        first_name=first_name or None,
+        last_name=last_name or None,
     )
     db.add(user)
     db.commit()
@@ -48,13 +55,21 @@ def create_user(
         target=f"user:{user.id} email={user.email} role={user.role}",
     )
 
-    return {"id": user.id, "email": user.email, "role": user.role}
+    return {
+        "id": user.id,
+        "email": user.email,
+        "role": user.role,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+    }
 
 class UserOut(BaseModel):
     id: int
     email: str
     role: str
     is_active: bool
+    first_name: str | None = None
+    last_name: str | None = None
 
 class RestaurantOut(BaseModel):
     id: int
@@ -66,6 +81,8 @@ class UserWithRestaurantsOut(BaseModel):
     email: str
     role: str
     is_active: bool
+    first_name: str | None = None
+    last_name: str | None = None
     restaurants: list[RestaurantOut]
 
 class RestaurantCreateIn(BaseModel):
@@ -82,7 +99,14 @@ def list_users(
 ):
     users = db.query(User).order_by(User.id.asc()).all()
     return [
-        UserOut(id=u.id, email=u.email, role=u.role, is_active=u.is_active)
+        UserOut(
+            id=u.id,
+            email=u.email,
+            role=u.role,
+            is_active=u.is_active,
+            first_name=u.first_name,
+            last_name=u.last_name,
+        )
         for u in users
     ]
 
@@ -103,6 +127,8 @@ def list_users_with_restaurants(
             email=u.email,
             role=u.role,
             is_active=u.is_active,
+            first_name=u.first_name,
+            last_name=u.last_name,
             restaurants=[
                 RestaurantOut(id=r.id, code=r.code, name=r.name) for r in u.restaurants
             ],

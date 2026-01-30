@@ -101,4 +101,6 @@ def me(user=Depends(get_current_user), db: Session = Depends(get_db)):
         "email": user.email,
         "role": user.role,
         "is_active": user.is_active,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
     }

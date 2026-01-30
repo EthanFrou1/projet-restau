@@ -3,6 +3,7 @@ import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Table,
   TableBody,
@@ -57,6 +58,7 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
   const [selectedReport, setSelectedReport] = useState<BKReport | null>(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const canSelectRestaurant = restaurants.length > 1;
   const fixedRestaurantCode = restaurants.length === 1 ? restaurants[0].code : "";
@@ -100,8 +102,12 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
   }
 
   async function handleDelete(reportId: number) {
-    const ok = confirm(`Supprimer l'import #${reportId} ?`);
-    if (!ok) return;
+    setConfirmDeleteId(reportId);
+  }
+
+  async function confirmDelete() {
+    if (confirmDeleteId === null) return;
+    const reportId = confirmDeleteId;
     setDeletingId(reportId);
     setErr(null);
     try {
@@ -117,6 +123,7 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
       setErr(e?.message ?? "Erreur suppression rapport");
     } finally {
       setDeletingId(null);
+      setConfirmDeleteId(null);
     }
   }
 
@@ -137,6 +144,19 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
         <CardTitle>Donnees globales BK</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <ConfirmDialog
+          open={confirmDeleteId !== null}
+          title="Supprimer cet import ?"
+          description={
+            confirmDeleteId !== null
+              ? `Confirmer la suppression de l'import #${confirmDeleteId}. Cette action est irreversible.`
+              : undefined
+          }
+          confirmLabel="Supprimer"
+          busy={confirmDeleteId !== null && deletingId === confirmDeleteId}
+          onCancel={() => setConfirmDeleteId(null)}
+          onConfirm={confirmDelete}
+        />
         <div className="text-sm text-muted-foreground">
           Vue par jour des imports BK, avec filtre par semaine ou restaurant.
         </div>

@@ -11,11 +11,19 @@ import { logout, listUsers, deleteUser } from "@/lib/auth";
 import { UserRestaurantAssign } from "@/components/admin/UserRestaurantAssign";
 import { RestaurantManager } from "@/components/admin/RestaurantManager";
 import { listUsersWithRestaurants, setUserRestaurants } from "@/lib/restaurants";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 
-type Me = { id: number; email: string; role: string; is_active: boolean };
+type Me = {
+  id: number;
+  email: string;
+  role: string;
+  is_active: boolean;
+  first_name?: string | null;
+  last_name?: string | null;
+};
 type AdminPing = { ok: boolean; scope: string };
 type AuditRow = { id: number; action: string; actor_email: string; target: string; timestamp: string };
 
@@ -25,20 +33,32 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
   const [audit, setAudit] = useState<AuditRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [newFirstName, setNewFirstName] = useState("");
+  const [newLastName, setNewLastName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState<"ADMIN" | "MANAGER" | "READONLY" | "DEV">("READONLY");
   const [createResult, setCreateResult] = useState<string | null>(null);
   const [newPassword2, setNewPassword2] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [users, setUsers] = useState<Array<{id:number; email:string; role:string; is_active:boolean}>>([]);
+  const [users, setUsers] = useState<Array<{
+    id: number;
+    email: string;
+    role: string;
+    is_active: boolean;
+    first_name?: string | null;
+    last_name?: string | null;
+  }>>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<{ id: number; label: string } | null>(null);
   const [assocUsers, setAssocUsers] = useState<
     Array<{
       id: number;
       email: string;
       role: string;
       is_active: boolean;
+      first_name?: string | null;
+      last_name?: string | null;
       restaurants: Array<{ id: number; code: string; name: string }>;
     }>
   >([]);
@@ -148,6 +168,24 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
             }}
         />
         <div className="mx-auto p-6 space-y-6">
+            <ConfirmDialog
+                open={Boolean(confirmDeleteUser)}
+                title="Supprimer cet utilisateur ?"
+                description={
+                    confirmDeleteUser
+                    ? `Confirmer la suppression de ${confirmDeleteUser.label}. Cette action est irreversible.`
+                    : undefined
+                }
+                confirmLabel="Supprimer"
+                onCancel={() => setConfirmDeleteUser(null)}
+                onConfirm={async () => {
+                    if (!confirmDeleteUser) return;
+                    const userId = confirmDeleteUser.id;
+                    setConfirmDeleteUser(null);
+                    await deleteUser(userId);
+                    await loadUsers();
+                }}
+            />
             <div className="flex items-center justify-between">
             <div className="space-y-1">
                 <h1 className="text-3xl font-semibold tracking-tight">Projet Restau — Dev Panel</h1>
@@ -243,7 +281,24 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                             </CardHeader>
 
                             <CardContent className="space-y-4">
-                            <div className="grid md:grid-cols-3 gap-4">
+                            <div className="grid md:grid-cols-4 gap-4">
+                                <div>
+                                    <div className="text-xs text-muted-foreground mb-1">PrÃ©nom</div>
+                                    <Input
+                                        value={newFirstName}
+                                        onChange={(e) => setNewFirstName(e.target.value)}
+                                        placeholder="Jean"
+                                    />
+                                </div>
+
+                                <div>
+                                    <div className="text-xs text-muted-foreground mb-1">Nom</div>
+                                    <Input
+                                        value={newLastName}
+                                        onChange={(e) => setNewLastName(e.target.value)}
+                                        placeholder="Dupont"
+                                    />
+                                </div>
                                 <div>
                                     <div className="text-xs text-muted-foreground mb-1">Email</div>
                                     <Input
@@ -321,8 +376,12 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                                             email: newEmail.trim().toLowerCase(),
                                             password: newPassword,
                                             role: newRole,
+                                            first_name: newFirstName.trim() || null,
+                                            last_name: newLastName.trim() || null,
                                         });
                                         setCreateResult(`✅ Utilisateur créé: ${res.email} (${res.role})`);
+                                        setNewFirstName("");
+                                        setNewLastName("");
                                         setNewEmail("");
                                         setNewPassword("");
                                         setNewPassword2("");
@@ -362,6 +421,8 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                                 <TableHeader>
                                     <TableRow>
                                     <TableHead className="w-[80px]">ID</TableHead>
+                                    <TableHead className="w-[140px]">Prenom</TableHead>
+                                    <TableHead className="w-[140px]">Nom</TableHead>
                                     <TableHead>Email</TableHead>
                                     <TableHead className="w-[120px]">Role</TableHead>
                                     <TableHead className="w-[120px]">Active</TableHead>
@@ -371,7 +432,7 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                                 <TableBody>
                                     {users.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={5} className="text-sm text-muted-foreground">
+                                        <TableCell colSpan={7} className="text-sm text-muted-foreground">
                                         Aucun user chargé.
                                         </TableCell>
                                     </TableRow>
@@ -379,6 +440,8 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                                     users.map((u) => (
                                         <TableRow key={u.id}>
                                         <TableCell>{u.id}</TableCell>
+                                        <TableCell>{u.first_name || "—"}</TableCell>
+                                        <TableCell>{u.last_name || "—"}</TableCell>
                                         <TableCell className="font-mono text-xs">{u.email}</TableCell>
                                         <TableCell>{u.role}</TableCell>
                                         <TableCell>{u.is_active ? "yes" : "no"}</TableCell>
@@ -388,10 +451,10 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                                             size="sm"
                                             disabled={u.id === me.id || u.role === "DEV"}
                                             onClick={async () => {
-                                                const ok = confirm(`Supprimer ${u.email} (id=${u.id}) ?`);
-                                                if (!ok) return;
-                                                await deleteUser(u.id);
-                                                await loadUsers(); // refresh
+                                                setConfirmDeleteUser({
+                                                    id: u.id,
+                                                    label: `${u.email} (id=${u.id})`,
+                                                });
                                             }}
                                             >
                                             Delete
@@ -442,7 +505,11 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                                             ) : (
                                                 assocUsers.map((u) => (
                                                     <TableRow key={u.id}>
-                                                        <TableCell className="font-mono text-xs">{u.email}</TableCell>
+                                                        <TableCell className="font-mono text-xs">
+                                                            {u.first_name || u.last_name
+                                                                ? `${u.first_name || ""} ${u.last_name || ""}`.trim()
+                                                                : u.email}
+                                                        </TableCell>
                                                         <TableCell>{u.role}</TableCell>
                                                         <TableCell>
                                                             <div className="flex flex-wrap gap-2">

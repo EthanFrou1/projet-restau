@@ -25,11 +25,15 @@ export async function createUser(payload: {
   email: string;
   password: string;
   role: "ADMIN" | "MANAGER" | "READONLY" | "DEV";
+  first_name?: string | null;
+  last_name?: string | null;
 }) {
   return apiFetch<{
     id: number;
     email: string;
     role: string;
+    first_name?: string | null;
+    last_name?: string | null;
   }>("/debug/create-user", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -37,7 +41,14 @@ export async function createUser(payload: {
 }
 
 export async function listUsers() {
-  return apiFetch<Array<{ id: number; email: string; role: string; is_active: boolean }>>(
+  return apiFetch<Array<{
+    id: number;
+    email: string;
+    role: string;
+    is_active: boolean;
+    first_name?: string | null;
+    last_name?: string | null;
+  }>>(
     "/debug/users"
   );
 }
