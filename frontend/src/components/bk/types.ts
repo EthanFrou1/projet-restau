@@ -4,6 +4,8 @@ export type BKReport = {
   restaurant_code: string;
   report_date: string;
   created_at: string;
+  comment?: string | null;
+  comment_n1?: string | null;
   kpi: {
     n1_ht: string | null;
     var_n1: string | null;

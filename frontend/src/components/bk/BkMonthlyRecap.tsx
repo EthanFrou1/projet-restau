@@ -20,6 +20,8 @@ type MonthlyItem = {
   restaurant_code: string;
   report_date: string;
   created_at: string;
+  comment?: string | null;
+  comment_n1?: string | null;
   ca_net_total: number;
   ca_ttc_total: number;
   tac_total: number;
@@ -167,8 +169,17 @@ export function BkMonthlyRecap({ restaurants }: Props) {
         client_click_collect: number | null;
         client_n1: number | null;
         cash_diff: number | null;
+        comment: string | null;
+        comment_n1: string | null;
       }
     >();
+
+    const mergeComment = (current: string | null, next: string | null) => {
+      if (!next) return current;
+      if (!current) return next;
+      if (current.includes(next)) return current;
+      return `${current} | ${next}`;
+    };
 
     for (const item of filteredItems) {
       const kpi = item.kpi;
@@ -188,6 +199,8 @@ export function BkMonthlyRecap({ restaurants }: Props) {
         client_click_collect: null,
         client_n1: null,
         cash_diff: null,
+        comment: null,
+        comment_n1: null,
       };
 
       const ca_real = kpi?.ca_real ?? item.ca_net_total ?? null;
@@ -209,6 +222,8 @@ export function BkMonthlyRecap({ restaurants }: Props) {
         client_click_collect: kpi?.client_click_collect ?? current.client_click_collect,
         client_n1: kpi?.client_n1 ?? current.client_n1,
         cash_diff: kpi?.cash_diff ?? current.cash_diff,
+        comment: mergeComment(current.comment, item.comment ?? null),
+        comment_n1: mergeComment(current.comment_n1, item.comment_n1 ?? null),
       });
     }
 
@@ -218,6 +233,8 @@ export function BkMonthlyRecap({ restaurants }: Props) {
           date: string;
           weekday: string;
           label: string;
+          comment: string | null;
+          comment_n1: string | null;
           n1_ht: number | null;
           var_n1: number | null;
           prev_ht: number | null;
@@ -237,6 +254,8 @@ export function BkMonthlyRecap({ restaurants }: Props) {
       | {
           type: "week";
           label: string;
+          comment?: string | null;
+          comment_n1?: string | null;
           n1_ht: number | null;
           var_n1: number | null;
           prev_ht: number | null;
@@ -352,6 +371,8 @@ export function BkMonthlyRecap({ restaurants }: Props) {
         date: iso,
         weekday: weekdayFmt.format(dateObj),
         label: dayMonthFmt.format(dateObj),
+        comment: inputs ? inputs.comment : null,
+        comment_n1: inputs ? inputs.comment_n1 : null,
         n1_ht: inputs ? inputs.n1_ht : null,
         var_n1: inputs ? inputs.var_n1 : null,
         prev_ht: inputs ? inputs.prev_ht : null,
@@ -534,6 +555,10 @@ export function BkMonthlyRecap({ restaurants }: Props) {
     if (value === other) return "text-muted-foreground";
     return value > other ? "text-emerald-700" : "text-red-600";
   };
+  const colCaClass = "bg-amber-50/70";
+  const colClientsClass = "bg-sky-50/70";
+  const colMpClass = "bg-emerald-50/70";
+  const colCncClass = "bg-teal-50/60";
 
   return (
     <Card>
@@ -585,20 +610,22 @@ export function BkMonthlyRecap({ restaurants }: Props) {
               <TableRow>
                 <TableHead>Jour</TableHead>
                 <TableHead>Date</TableHead>
+                <TableHead>Commentaire N-1</TableHead>
+                <TableHead>Commentaire</TableHead>
                 <TableHead className="text-right">N-1 HT</TableHead>
                 <TableHead className="text-right">Var N-1</TableHead>
                 <TableHead className="text-right">Prev HT</TableHead>
                 <TableHead className="text-right">% Prev vs N-1</TableHead>
-                <TableHead className="text-right">CA real</TableHead>
-                <TableHead className="text-right">% N-1</TableHead>
+                <TableHead className={`text-right ${colCaClass}`}>CA real</TableHead>
+                <TableHead className={`text-right ${colCaClass}`}>% N-1</TableHead>
                 <TableHead className="text-right">Ecart Prev</TableHead>
                 <TableHead className="text-right">Ecart Prev %</TableHead>
-                <TableHead className="text-right">Clients</TableHead>
+                <TableHead className={`text-right ${colClientsClass}`}>Clients</TableHead>
                 <TableHead className="text-right">Clients N-1</TableHead>
-                <TableHead className="text-right">% N-1</TableHead>
+                <TableHead className={`text-right ${colClientsClass}`}>% N-1</TableHead>
                 <TableHead className="text-right">MP</TableHead>
                 <TableHead className="text-right">MP N-1</TableHead>
-                <TableHead className="text-right">% N-1</TableHead>
+                <TableHead className={`text-right ${colMpClass}`}>% N-1</TableHead>
                 <TableHead className="text-right">CA delivery</TableHead>
                 <TableHead className="text-right">CA delivery N-1</TableHead>
                 <TableHead className="text-right">% N-1</TableHead>
@@ -609,16 +636,16 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                 <TableHead className="text-right">MP N-1</TableHead>
                 <TableHead className="text-right">% N-1</TableHead>
                 <TableHead className="text-right">% CA</TableHead>
-                <TableHead className="text-right">CA Clic N Collect</TableHead>
-                <TableHead className="text-right">CNC N-1</TableHead>
-                <TableHead className="text-right">% N-1</TableHead>
-                <TableHead className="text-right">Client</TableHead>
-                <TableHead className="text-right">Client N-1</TableHead>
-                <TableHead className="text-right">% N-1</TableHead>
-                <TableHead className="text-right">MP</TableHead>
-                <TableHead className="text-right">MP N-1</TableHead>
-                <TableHead className="text-right">% N-1</TableHead>
-                <TableHead className="text-right">% CA CNC</TableHead>
+                <TableHead className={`text-right ${colCncClass}`}>CA Clic N Collect</TableHead>
+                <TableHead className={`text-right ${colCncClass}`}>CNC N-1</TableHead>
+                <TableHead className={`text-right ${colCncClass}`}>% N-1</TableHead>
+                <TableHead className={`text-right ${colCncClass}`}>Client</TableHead>
+                <TableHead className={`text-right ${colCncClass}`}>Client N-1</TableHead>
+                <TableHead className={`text-right ${colCncClass}`}>% N-1</TableHead>
+                <TableHead className={`text-right ${colCncClass}`}>MP</TableHead>
+                <TableHead className={`text-right ${colCncClass}`}>MP N-1</TableHead>
+                <TableHead className={`text-right ${colCncClass}`}>% N-1</TableHead>
+                <TableHead className={`text-right ${colCncClass}`}>% CA CNC</TableHead>
                 <TableHead className="text-right">Ecart caisse</TableHead>
                 <TableHead className="text-right">Ecart caisse % CA</TableHead>
               </TableRow>
@@ -626,7 +653,7 @@ export function BkMonthlyRecap({ restaurants }: Props) {
             <TableBody>
               {dayRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={36} className="text-sm text-muted-foreground">
+                  <TableCell colSpan={38} className="text-sm text-muted-foreground">
                     Aucun rapport pour ce mois.
                   </TableCell>
                 </TableRow>
@@ -636,7 +663,7 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                   if (row.type === "week") {
                     return (
                       <TableRow key={`${row.label}-${index}`} className="bg-muted/30">
-                        <TableCell className="font-medium" colSpan={2}>
+                        <TableCell className="font-medium" colSpan={4}>
                           {row.label}
                         </TableCell>
                         <TableCell className={`text-right font-medium ${compareClass(row.n1_ht, row.ca_real)}`}>
@@ -645,26 +672,26 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                         <TableCell className="text-right font-medium">{formatMoney(row.var_n1)}</TableCell>
                         <TableCell className="text-right font-medium">{formatMoney(row.prev_ht)}</TableCell>
                         <TableCell className="text-right font-medium">{formatPercent(calc.prev_vs_n1)}</TableCell>
-                        <TableCell className={`text-right font-medium ${compareClass(row.ca_real, row.n1_ht)}`}>
+                        <TableCell className={`text-right font-medium ${colCaClass} ${compareClass(row.ca_real, row.n1_ht)}`}>
                           {formatMoney(row.ca_real)}
                         </TableCell>
-                        <TableCell className="text-right font-medium">{formatPercent(calc.ca_vs_n1)}</TableCell>
+                        <TableCell className={`text-right font-medium ${colCaClass}`}>{formatPercent(calc.ca_vs_n1)}</TableCell>
                         <TableCell className="text-right font-medium">{formatMoney(calc.ecart_prev)}</TableCell>
                         <TableCell className="text-right font-medium">{formatPercent(calc.ecart_prev_pct)}</TableCell>
-                        <TableCell className={`text-right font-medium ${compareClass(row.clients, row.clients_n1)}`}>
+                        <TableCell className={`text-right font-medium ${colClientsClass} ${compareClass(row.clients, row.clients_n1)}`}>
                           {formatInt(row.clients)}
                         </TableCell>
                         <TableCell className={`text-right font-medium ${compareClass(row.clients_n1, row.clients)}`}>
                           {formatInt(row.clients_n1)}
                         </TableCell>
-                        <TableCell className="text-right font-medium">{formatPercent(calc.clients_pct_n1)}</TableCell>
+                        <TableCell className={`text-right font-medium ${colClientsClass}`}>{formatPercent(calc.clients_pct_n1)}</TableCell>
                         <TableCell className={`text-right font-medium ${compareClass(calc.mp, calc.mp_n1)}`}>
                           {formatMoney(calc.mp)}
                         </TableCell>
                         <TableCell className={`text-right font-medium ${compareClass(calc.mp_n1, calc.mp)}`}>
                           {formatMoney(calc.mp_n1)}
                         </TableCell>
-                        <TableCell className="text-right font-medium">{formatPercent(calc.mp_pct_n1)}</TableCell>
+                        <TableCell className={`text-right font-medium ${colMpClass}`}>{formatPercent(calc.mp_pct_n1)}</TableCell>
                         <TableCell className={`text-right font-medium ${compareClass(row.ca_delivery, row.ca_delivery_n1)}`}>
                           {formatMoney(row.ca_delivery)}
                         </TableCell>
@@ -687,28 +714,28 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                         </TableCell>
                         <TableCell className="text-right font-medium">{formatPercent(calc.mp_delivery_pct_n1)}</TableCell>
                         <TableCell className="text-right font-medium">{formatPercent(calc.pct_ca_delivery)}</TableCell>
-                        <TableCell className={`text-right font-medium ${compareClass(row.ca_click_collect, row.cnc_n1)}`}>
+                        <TableCell className={`text-right font-medium ${colCncClass} ${compareClass(row.ca_click_collect, row.cnc_n1)}`}>
                           {formatMoney(row.ca_click_collect)}
                         </TableCell>
-                        <TableCell className={`text-right font-medium ${compareClass(row.cnc_n1, row.ca_click_collect)}`}>
+                        <TableCell className={`text-right font-medium ${colCncClass} ${compareClass(row.cnc_n1, row.ca_click_collect)}`}>
                           {formatMoney(row.cnc_n1)}
                         </TableCell>
-                        <TableCell className="text-right font-medium">{formatPercent(calc.cnc_pct_n1)}</TableCell>
-                        <TableCell className={`text-right font-medium ${compareClass(row.client_click_collect, row.client_n1)}`}>
+                        <TableCell className={`text-right font-medium ${colCncClass}`}>{formatPercent(calc.cnc_pct_n1)}</TableCell>
+                        <TableCell className={`text-right font-medium ${colCncClass} ${compareClass(row.client_click_collect, row.client_n1)}`}>
                           {formatInt(row.client_click_collect)}
                         </TableCell>
-                        <TableCell className={`text-right font-medium ${compareClass(row.client_n1, row.client_click_collect)}`}>
+                        <TableCell className={`text-right font-medium ${colCncClass} ${compareClass(row.client_n1, row.client_click_collect)}`}>
                           {formatInt(row.client_n1)}
                         </TableCell>
-                        <TableCell className="text-right font-medium">{formatPercent(calc.client_cnc_pct_n1)}</TableCell>
-                        <TableCell className={`text-right font-medium ${compareClass(calc.mp_cnc, calc.mp_cnc_n1)}`}>
+                        <TableCell className={`text-right font-medium ${colCncClass}`}>{formatPercent(calc.client_cnc_pct_n1)}</TableCell>
+                        <TableCell className={`text-right font-medium ${colCncClass} ${compareClass(calc.mp_cnc, calc.mp_cnc_n1)}`}>
                           {formatMoney(calc.mp_cnc)}
                         </TableCell>
-                        <TableCell className={`text-right font-medium ${compareClass(calc.mp_cnc_n1, calc.mp_cnc)}`}>
+                        <TableCell className={`text-right font-medium ${colCncClass} ${compareClass(calc.mp_cnc_n1, calc.mp_cnc)}`}>
                           {formatMoney(calc.mp_cnc_n1)}
                         </TableCell>
-                        <TableCell className="text-right font-medium">{formatPercent(calc.mp_cnc_pct_n1)}</TableCell>
-                        <TableCell className="text-right font-medium">{formatPercent(calc.pct_ca_cnc)}</TableCell>
+                        <TableCell className={`text-right font-medium ${colCncClass}`}>{formatPercent(calc.mp_cnc_pct_n1)}</TableCell>
+                        <TableCell className={`text-right font-medium ${colCncClass}`}>{formatPercent(calc.pct_ca_cnc)}</TableCell>
                         <TableCell className="text-right font-medium">{formatMoney(row.cash_diff)}</TableCell>
                         <TableCell className="text-right font-medium">{formatPercent(calc.cash_diff_pct_ca)}</TableCell>
                       </TableRow>
@@ -720,32 +747,44 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                     <TableRow key={row.date} className={isToday ? "bg-primary/5 ring-2 ring-primary/30 ring-inset" : undefined}>
                       <TableCell className="capitalize">{row.weekday}</TableCell>
                       <TableCell className="font-mono text-xs">{row.label}</TableCell>
+                      <TableCell
+                        className="max-w-[220px] truncate text-xs text-muted-foreground"
+                        title={row.comment_n1 || ""}
+                      >
+                        {row.comment_n1 || "—"}
+                      </TableCell>
+                      <TableCell
+                        className="max-w-[220px] truncate text-xs text-muted-foreground"
+                        title={row.comment || ""}
+                      >
+                        {row.comment || "—"}
+                      </TableCell>
                       <TableCell className={`text-right ${compareClass(row.n1_ht, row.ca_real)}`}>
                         {formatMoney(row.n1_ht)}
                       </TableCell>
                       <TableCell className="text-right">{formatMoney(row.var_n1)}</TableCell>
                       <TableCell className="text-right">{formatMoney(row.prev_ht)}</TableCell>
                       <TableCell className="text-right">{formatPercent(calc.prev_vs_n1)}</TableCell>
-                      <TableCell className={`text-right ${compareClass(row.ca_real, row.n1_ht)}`}>
+                      <TableCell className={`text-right ${colCaClass} ${compareClass(row.ca_real, row.n1_ht)}`}>
                         {formatMoney(row.ca_real)}
                       </TableCell>
-                      <TableCell className="text-right">{formatPercent(calc.ca_vs_n1)}</TableCell>
+                      <TableCell className={`text-right ${colCaClass}`}>{formatPercent(calc.ca_vs_n1)}</TableCell>
                       <TableCell className="text-right">{formatMoney(calc.ecart_prev)}</TableCell>
                       <TableCell className="text-right">{formatPercent(calc.ecart_prev_pct)}</TableCell>
-                      <TableCell className={`text-right ${compareClass(row.clients, row.clients_n1)}`}>
+                      <TableCell className={`text-right ${colClientsClass} ${compareClass(row.clients, row.clients_n1)}`}>
                         {formatInt(row.clients)}
                       </TableCell>
                       <TableCell className={`text-right ${compareClass(row.clients_n1, row.clients)}`}>
                         {formatInt(row.clients_n1)}
                       </TableCell>
-                      <TableCell className="text-right">{formatPercent(calc.clients_pct_n1)}</TableCell>
+                      <TableCell className={`text-right ${colClientsClass}`}>{formatPercent(calc.clients_pct_n1)}</TableCell>
                       <TableCell className={`text-right ${compareClass(calc.mp, calc.mp_n1)}`}>
                         {formatMoney(calc.mp)}
                       </TableCell>
                       <TableCell className={`text-right ${compareClass(calc.mp_n1, calc.mp)}`}>
                         {formatMoney(calc.mp_n1)}
                       </TableCell>
-                      <TableCell className="text-right">{formatPercent(calc.mp_pct_n1)}</TableCell>
+                      <TableCell className={`text-right ${colMpClass}`}>{formatPercent(calc.mp_pct_n1)}</TableCell>
                       <TableCell className={`text-right ${compareClass(row.ca_delivery, row.ca_delivery_n1)}`}>
                         {formatMoney(row.ca_delivery)}
                       </TableCell>
@@ -768,28 +807,28 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                       </TableCell>
                       <TableCell className="text-right">{formatPercent(calc.mp_delivery_pct_n1)}</TableCell>
                       <TableCell className="text-right">{formatPercent(calc.pct_ca_delivery)}</TableCell>
-                      <TableCell className={`text-right ${compareClass(row.ca_click_collect, row.cnc_n1)}`}>
+                      <TableCell className={`text-right ${colCncClass} ${compareClass(row.ca_click_collect, row.cnc_n1)}`}>
                         {formatMoney(row.ca_click_collect)}
                       </TableCell>
-                      <TableCell className={`text-right ${compareClass(row.cnc_n1, row.ca_click_collect)}`}>
+                      <TableCell className={`text-right ${colCncClass} ${compareClass(row.cnc_n1, row.ca_click_collect)}`}>
                         {formatMoney(row.cnc_n1)}
                       </TableCell>
-                      <TableCell className="text-right">{formatPercent(calc.cnc_pct_n1)}</TableCell>
-                      <TableCell className={`text-right ${compareClass(row.client_click_collect, row.client_n1)}`}>
+                      <TableCell className={`text-right ${colCncClass}`}>{formatPercent(calc.cnc_pct_n1)}</TableCell>
+                      <TableCell className={`text-right ${colCncClass} ${compareClass(row.client_click_collect, row.client_n1)}`}>
                         {formatInt(row.client_click_collect)}
                       </TableCell>
-                      <TableCell className={`text-right ${compareClass(row.client_n1, row.client_click_collect)}`}>
+                      <TableCell className={`text-right ${colCncClass} ${compareClass(row.client_n1, row.client_click_collect)}`}>
                         {formatInt(row.client_n1)}
                       </TableCell>
-                      <TableCell className="text-right">{formatPercent(calc.client_cnc_pct_n1)}</TableCell>
-                      <TableCell className={`text-right ${compareClass(calc.mp_cnc, calc.mp_cnc_n1)}`}>
+                      <TableCell className={`text-right ${colCncClass}`}>{formatPercent(calc.client_cnc_pct_n1)}</TableCell>
+                      <TableCell className={`text-right ${colCncClass} ${compareClass(calc.mp_cnc, calc.mp_cnc_n1)}`}>
                         {formatMoney(calc.mp_cnc)}
                       </TableCell>
-                      <TableCell className={`text-right ${compareClass(calc.mp_cnc_n1, calc.mp_cnc)}`}>
+                      <TableCell className={`text-right ${colCncClass} ${compareClass(calc.mp_cnc_n1, calc.mp_cnc)}`}>
                         {formatMoney(calc.mp_cnc_n1)}
                       </TableCell>
-                      <TableCell className="text-right">{formatPercent(calc.mp_cnc_pct_n1)}</TableCell>
-                      <TableCell className="text-right">{formatPercent(calc.pct_ca_cnc)}</TableCell>
+                      <TableCell className={`text-right ${colCncClass}`}>{formatPercent(calc.mp_cnc_pct_n1)}</TableCell>
+                      <TableCell className={`text-right ${colCncClass}`}>{formatPercent(calc.pct_ca_cnc)}</TableCell>
                       <TableCell className="text-right">{formatMoney(row.cash_diff)}</TableCell>
                       <TableCell className="text-right">{formatPercent(calc.cash_diff_pct_ca)}</TableCell>
                     </TableRow>
@@ -799,7 +838,7 @@ export function BkMonthlyRecap({ restaurants }: Props) {
 
               {dayRows.length > 0 && (
                 <TableRow className="bg-primary/5">
-                  <TableCell className="font-semibold" colSpan={2}>
+                  <TableCell className="font-semibold" colSpan={4}>
                     {(() => {
                       if (!month) return "Total mois";
                       const [yearStr, monthStr] = month.split("-");
@@ -811,7 +850,15 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                     })()}
                   </TableCell>
                   {(() => {
-                    const calc = calcRow({ type: "day", date: "", weekday: "", label: "", ...monthTotals });
+                    const calc = calcRow({
+                      type: "day",
+                      date: "",
+                      weekday: "",
+                      label: "",
+                      comment: null,
+                      comment_n1: null,
+                      ...monthTotals,
+                    });
                     return (
                       <>
                         <TableCell className={`text-right font-semibold ${compareClass(monthTotals.n1_ht, monthTotals.ca_real)}`}>
@@ -820,26 +867,26 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                         <TableCell className="text-right font-semibold">{formatMoney(monthTotals.var_n1)}</TableCell>
                         <TableCell className="text-right font-semibold">{formatMoney(monthTotals.prev_ht)}</TableCell>
                         <TableCell className="text-right font-semibold">{formatPercent(calc.prev_vs_n1)}</TableCell>
-                        <TableCell className={`text-right font-semibold ${compareClass(monthTotals.ca_real, monthTotals.n1_ht)}`}>
+                        <TableCell className={`text-right font-semibold ${colCaClass} ${compareClass(monthTotals.ca_real, monthTotals.n1_ht)}`}>
                           {formatMoney(monthTotals.ca_real)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{formatPercent(calc.ca_vs_n1)}</TableCell>
+                        <TableCell className={`text-right font-semibold ${colCaClass}`}>{formatPercent(calc.ca_vs_n1)}</TableCell>
                         <TableCell className="text-right font-semibold">{formatMoney(calc.ecart_prev)}</TableCell>
                         <TableCell className="text-right font-semibold">{formatPercent(calc.ecart_prev_pct)}</TableCell>
-                        <TableCell className={`text-right font-semibold ${compareClass(monthTotals.clients, monthTotals.clients_n1)}`}>
+                        <TableCell className={`text-right font-semibold ${colClientsClass} ${compareClass(monthTotals.clients, monthTotals.clients_n1)}`}>
                           {formatInt(monthTotals.clients)}
                         </TableCell>
                         <TableCell className={`text-right font-semibold ${compareClass(monthTotals.clients_n1, monthTotals.clients)}`}>
                           {formatInt(monthTotals.clients_n1)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{formatPercent(calc.clients_pct_n1)}</TableCell>
+                        <TableCell className={`text-right font-semibold ${colClientsClass}`}>{formatPercent(calc.clients_pct_n1)}</TableCell>
                         <TableCell className={`text-right font-semibold ${compareClass(calc.mp, calc.mp_n1)}`}>
                           {formatMoney(calc.mp)}
                         </TableCell>
                         <TableCell className={`text-right font-semibold ${compareClass(calc.mp_n1, calc.mp)}`}>
                           {formatMoney(calc.mp_n1)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{formatPercent(calc.mp_pct_n1)}</TableCell>
+                        <TableCell className={`text-right font-semibold ${colMpClass}`}>{formatPercent(calc.mp_pct_n1)}</TableCell>
                         <TableCell className={`text-right font-semibold ${compareClass(monthTotals.ca_delivery, monthTotals.ca_delivery_n1)}`}>
                           {formatMoney(monthTotals.ca_delivery)}
                         </TableCell>
@@ -862,28 +909,28 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                         </TableCell>
                         <TableCell className="text-right font-semibold">{formatPercent(calc.mp_delivery_pct_n1)}</TableCell>
                         <TableCell className="text-right font-semibold">{formatPercent(calc.pct_ca_delivery)}</TableCell>
-                        <TableCell className={`text-right font-semibold ${compareClass(monthTotals.ca_click_collect, monthTotals.cnc_n1)}`}>
+                        <TableCell className={`text-right font-semibold ${colCncClass} ${compareClass(monthTotals.ca_click_collect, monthTotals.cnc_n1)}`}>
                           {formatMoney(monthTotals.ca_click_collect)}
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${compareClass(monthTotals.cnc_n1, monthTotals.ca_click_collect)}`}>
+                        <TableCell className={`text-right font-semibold ${colCncClass} ${compareClass(monthTotals.cnc_n1, monthTotals.ca_click_collect)}`}>
                           {formatMoney(monthTotals.cnc_n1)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{formatPercent(calc.cnc_pct_n1)}</TableCell>
-                        <TableCell className={`text-right font-semibold ${compareClass(monthTotals.client_click_collect, monthTotals.client_n1)}`}>
+                        <TableCell className={`text-right font-semibold ${colCncClass}`}>{formatPercent(calc.cnc_pct_n1)}</TableCell>
+                        <TableCell className={`text-right font-semibold ${colCncClass} ${compareClass(monthTotals.client_click_collect, monthTotals.client_n1)}`}>
                           {formatInt(monthTotals.client_click_collect)}
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${compareClass(monthTotals.client_n1, monthTotals.client_click_collect)}`}>
+                        <TableCell className={`text-right font-semibold ${colCncClass} ${compareClass(monthTotals.client_n1, monthTotals.client_click_collect)}`}>
                           {formatInt(monthTotals.client_n1)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{formatPercent(calc.client_cnc_pct_n1)}</TableCell>
-                        <TableCell className={`text-right font-semibold ${compareClass(calc.mp_cnc, calc.mp_cnc_n1)}`}>
+                        <TableCell className={`text-right font-semibold ${colCncClass}`}>{formatPercent(calc.client_cnc_pct_n1)}</TableCell>
+                        <TableCell className={`text-right font-semibold ${colCncClass} ${compareClass(calc.mp_cnc, calc.mp_cnc_n1)}`}>
                           {formatMoney(calc.mp_cnc)}
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${compareClass(calc.mp_cnc_n1, calc.mp_cnc)}`}>
+                        <TableCell className={`text-right font-semibold ${colCncClass} ${compareClass(calc.mp_cnc_n1, calc.mp_cnc)}`}>
                           {formatMoney(calc.mp_cnc_n1)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{formatPercent(calc.mp_cnc_pct_n1)}</TableCell>
-                        <TableCell className="text-right font-semibold">{formatPercent(calc.pct_ca_cnc)}</TableCell>
+                        <TableCell className={`text-right font-semibold ${colCncClass}`}>{formatPercent(calc.mp_cnc_pct_n1)}</TableCell>
+                        <TableCell className={`text-right font-semibold ${colCncClass}`}>{formatPercent(calc.pct_ca_cnc)}</TableCell>
                         <TableCell className="text-right font-semibold">{formatMoney(monthTotals.cash_diff)}</TableCell>
                         <TableCell className="text-right font-semibold">{formatPercent(calc.cash_diff_pct_ca)}</TableCell>
                       </>

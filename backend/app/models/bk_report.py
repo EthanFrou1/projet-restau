@@ -12,10 +12,16 @@ class BKDailyReport(Base):
     client_code: Mapped[str] = mapped_column(String(10), nullable=False, default="BK")
     restaurant_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     report_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    comment: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    imported_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    is_reimport: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
+    imported_by: Mapped["User | None"] = relationship()
     channel_sales: Mapped[list["BKChannelSales"]] = relationship(
         back_populates="report", cascade="all, delete-orphan"
     )

@@ -88,6 +88,8 @@ def _read_csv_rows(file: UploadFile) -> list[dict[str, str]]:
 def upload_bk_report(
     report_date: date = Form(...),
     restaurant_code: str = Form(...),
+    comment: str | None = Form(None),
+    is_reimport: bool = Form(False),
     caparprofit: UploadFile = File(...),
     consommationparprofit: UploadFile = File(...),
     corrections: UploadFile = File(...),
@@ -120,6 +122,9 @@ def upload_bk_report(
         client_code="BK",
         restaurant_code=restaurant_code.strip().upper(),
         report_date=report_date,
+        comment=comment.strip() if comment else None,
+        imported_by_user_id=getattr(_user, "id", None),
+        is_reimport=is_reimport,
     )
     db.add(report)
     db.flush()
@@ -380,7 +385,8 @@ def list_bk_reports(
         query = query.filter(BKDailyReport.restaurant_code.in_(allowed))
 
     reports = (
-        query.order_by(BKDailyReport.report_date.desc(), BKDailyReport.restaurant_code.asc())
+        query.options(joinedload(BKDailyReport.imported_by))
+        .order_by(BKDailyReport.report_date.desc(), BKDailyReport.restaurant_code.asc())
         .all()
     )
 
@@ -390,6 +396,16 @@ def list_bk_reports(
             "restaurant_code": report.restaurant_code,
             "report_date": report.report_date.isoformat(),
             "created_at": report.created_at.isoformat(),
+            "comment": report.comment,
+            "is_reimport": report.is_reimport,
+            "imported_by": None
+            if not report.imported_by
+            else {
+                "id": report.imported_by.id,
+                "email": report.imported_by.email,
+                "first_name": report.imported_by.first_name,
+                "last_name": report.imported_by.last_name,
+            },
         }
         for report in reports
     ]
@@ -584,6 +600,8 @@ def list_bk_reports_monthly(
                 "restaurant_code": report.restaurant_code,
                 "report_date": report.report_date.isoformat(),
                 "created_at": report.created_at.isoformat(),
+                "comment": report.comment,
+                "comment_n1": prev_report.comment if prev_report else None,
                 "ca_net_total": ca_net_total,
                 "ca_ttc_total": ca_ttc_total,
                 "tac_total": tac_total,
@@ -620,12 +638,31 @@ def get_bk_report(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
+    prev_comment = None
+    try:
+        prev_date = date(report.report_date.year - 1, report.report_date.month, report.report_date.day)
+    except ValueError:
+        prev_date = None
+    if prev_date:
+        prev_report = (
+            db.query(BKDailyReport)
+            .filter(
+                BKDailyReport.restaurant_code == report.restaurant_code,
+                BKDailyReport.report_date == prev_date,
+            )
+            .first()
+        )
+        if prev_report:
+            prev_comment = prev_report.comment
+
     return {
         "id": report.id,
         "client_code": report.client_code,
         "restaurant_code": report.restaurant_code,
         "report_date": report.report_date.isoformat(),
         "created_at": report.created_at.isoformat(),
+        "comment": report.comment,
+        "comment_n1": prev_comment,
         "kpi": None
         if not report.kpi
         else {

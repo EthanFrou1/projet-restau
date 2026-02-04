@@ -21,6 +21,14 @@ type ReportListItem = {
   restaurant_code: string;
   report_date: string;
   created_at: string;
+  comment?: string | null;
+  is_reimport?: boolean | null;
+  imported_by?: {
+    id: number;
+    email: string;
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null;
 };
 
 type Props = {
@@ -203,13 +211,16 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
                 <TableHead>Date</TableHead>
                 <TableHead>Restaurant</TableHead>
                 <TableHead>Importe le</TableHead>
+                <TableHead>Importe par</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Commentaire</TableHead>
                 <TableHead className="w-[200px] text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-sm text-muted-foreground">
+                  <TableCell colSpan={7} className="text-sm text-muted-foreground">
                     Aucun rapport pour cette periode.
                   </TableCell>
                 </TableRow>
@@ -220,6 +231,20 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
                       <TableCell className="font-mono text-xs">{item.restaurant_code}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {formatDateTime(item.created_at)}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {(() => {
+                          const user = item.imported_by;
+                          if (!user) return "—";
+                          const full = `${user.first_name || ""} ${user.last_name || ""}`.trim();
+                          return full || user.email;
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {item.is_reimport ? "Réimport" : "Import"}
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground max-w-[260px] truncate">
+                        {item.comment || "—"}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

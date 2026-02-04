@@ -96,6 +96,17 @@ export function BkReportView({ report }: Props) {
         <div className="text-sm text-muted-foreground">
           Rapport BK {report.report_date} — {report.restaurant_code}
         </div>
+        {(report.comment || report.comment_n1) && (
+          <div className="space-y-2">
+            <div className="text-sm font-medium">Commentaires</div>
+            <div className="rounded-md border bg-muted/20 p-3 space-y-2">
+              <div className="text-xs text-muted-foreground">Jour</div>
+              <div className="text-sm whitespace-pre-wrap">{report.comment || "—"}</div>
+              <div className="text-xs text-muted-foreground">N-1</div>
+              <div className="text-sm whitespace-pre-wrap">{report.comment_n1 || "—"}</div>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-2">
           <div className="text-sm font-medium">Canaux (CA par profit)</div>

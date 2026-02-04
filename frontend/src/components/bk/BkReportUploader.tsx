@@ -52,6 +52,8 @@ export function BkReportUploader({ restaurants, onUploaded, canReplace = false }
   const [reportsByCode, setReportsByCode] = useState<Record<string, ReportListItem>>({});
   const [replaceTarget, setReplaceTarget] = useState<{ code: string; reportId: number } | null>(null);
   const [replaceMode, setReplaceMode] = useState<{ code: string; reportId: number } | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [commentDraft, setCommentDraft] = useState("");
 
   const [fileCaparprofit, setFileCaparprofit] = useState<File | null>(null);
   const [fileConsommation, setFileConsommation] = useState<File | null>(null);
@@ -105,6 +107,7 @@ export function BkReportUploader({ restaurants, onUploaded, canReplace = false }
     setRestaurantCode(code);
     setUploadMsg(null);
     setReplaceMode(null);
+    setCommentDraft("");
     resetFiles();
   }
 
@@ -144,10 +147,11 @@ export function BkReportUploader({ restaurants, onUploaded, canReplace = false }
     setRestaurantCode("");
     setReplaceMode(null);
     setUploadMsg(null);
+    setCommentDraft("");
     resetFiles();
   }, [reportDate, restaurants]);
 
-  async function handleUpload() {
+  async function handleUpload(comment?: string) {
     setUploadMsg(null);
     const finalCode = restaurantCode.trim().toUpperCase();
     if (!reportDate) {
@@ -191,6 +195,12 @@ export function BkReportUploader({ restaurants, onUploaded, canReplace = false }
       const fd = new FormData();
       fd.append("report_date", reportDate);
       fd.append("restaurant_code", finalCode);
+      if (comment) {
+        fd.append("comment", comment);
+      }
+      if (replaceMode && replaceMode.code === finalCode) {
+        fd.append("is_reimport", "true");
+      }
       fd.append("caparprofit", fileCaparprofit);
       fd.append("consommationparprofit", fileConsommation);
       fd.append("corrections", fileCorrections);
@@ -210,6 +220,7 @@ export function BkReportUploader({ restaurants, onUploaded, canReplace = false }
       setUploadMsg(replaceMode ? "✅ Import remplacé." : "✅ Import terminé.");
       await loadStatus(reportDate);
       setReplaceMode(null);
+      setCommentDraft("");
       resetFiles();
     } catch (e: any) {
       setUploadMsg(`❌ ${e?.message ?? "Erreur import CSV"}`);
@@ -241,6 +252,48 @@ export function BkReportUploader({ restaurants, onUploaded, canReplace = false }
             setReplaceTarget(null);
           }}
         />
+        {confirmOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-lg rounded-lg border bg-background shadow-lg">
+              <div className="space-y-3 p-4">
+                <h3 className="text-base font-semibold">Confirmer l'import</h3>
+                <div className="text-sm text-muted-foreground">
+                  {finalCode ? `${finalCode} (${reportDate})` : `Import du ${reportDate}`}
+                </div>
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground">
+                    Commentaire (jour ferie, vacances, operation, etc.)
+                  </div>
+                  <textarea
+                    className="min-h-[90px] w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    value={commentDraft}
+                    onChange={(e) => setCommentDraft(e.target.value)}
+                    placeholder="Ex: Jour ferie, forte affluence, travaux, etc."
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t p-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setConfirmOpen(false)}
+                  disabled={uploading}
+                >
+                  Annuler
+                </Button>
+                <Button
+                  onClick={() => {
+                    const comment = commentDraft.trim();
+                    setConfirmOpen(false);
+                    handleUpload(comment ? comment : undefined);
+                  }}
+                  disabled={!canSubmit || uploading}
+                >
+                  {uploading ? "Import..." : "Confirmer l'import"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="text-sm text-muted-foreground">
           Dépose tous les CSV BK du jour. Ils seront importés et contrôlés avant consolidation.
@@ -262,17 +315,7 @@ export function BkReportUploader({ restaurants, onUploaded, canReplace = false }
           </div>
 
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="text-xs text-muted-foreground">Statut des imports</div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => loadStatus(reportDate)}
-                disabled={statusLoading}
-              >
-                {statusLoading ? "Chargement..." : "Rafraichir"}
-              </Button>
-            </div>
+            <div className="text-xs text-muted-foreground">Statut des imports</div>
             {statusError && (
               <div className="text-sm text-destructive whitespace-pre-wrap">{statusError}</div>
             )}
@@ -471,7 +514,7 @@ export function BkReportUploader({ restaurants, onUploaded, canReplace = false }
             </div>
 
             <div className="flex gap-2">
-              <Button onClick={handleUpload} disabled={!canSubmit}>
+              <Button onClick={() => setConfirmOpen(true)} disabled={!canSubmit}>
                 {uploading ? "Import..." : "Importer les CSV"}
               </Button>
             </div>

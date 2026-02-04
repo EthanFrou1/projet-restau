@@ -10,6 +10,7 @@ import { BkReportUploader } from "@/components/bk/BkReportUploader";
 import { BkReportView } from "@/components/bk/BkReportView";
 import { BkReportBrowser } from "@/components/bk/BkReportBrowser";
 import { BkMonthlyRecap } from "@/components/bk/BkMonthlyRecap";
+import { BkComparison } from "@/components/bk/BkComparison";
 import { apiFetch } from "@/lib/api";
 import type { BKReport } from "@/components/bk/types";
 import { getMyRestaurants, listUsersWithRestaurants, setUserRestaurants } from "@/lib/restaurants";
@@ -178,7 +179,8 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
     me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV" || me?.role === "READONLY";
   const canDeleteBk = me?.role === "ADMIN" || me?.role === "DEV";
   const canReplaceImport = me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV";
-  const isWideTab = activeTab === "bk-global" || activeTab === "bk-monthly";
+  const isWideTab =
+    activeTab === "bk-global" || activeTab === "bk-monthly" || activeTab === "bk-compare";
   const containerClass = isWideTab
     ? "mx-auto p-6 space-y-6 max-w-none"
     : "mx-auto p-6 space-y-6 max-w-6xl";
@@ -264,43 +266,45 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
     })();
   }, [dashYear, dashMonth, dashRestaurant]);
 
-  useEffect(() => {
+  async function refreshDailyStatus() {
     if (!canSeeDailyBanner) return;
     if (!restaurants) return;
     const today = toIsoDate(new Date());
+    if (restaurants.length === 0) {
+      setDailyStatus({
+        loading: false,
+        missing: [],
+        date: today,
+        error: null,
+        noRestaurants: true,
+      });
+      return;
+    }
+    setDailyStatus((prev) => ({ ...prev, loading: true, error: null, date: today }));
+    try {
+      const params = new URLSearchParams();
+      params.set("start_date", today);
+      params.set("end_date", today);
+      const data = await apiFetch<ReportListItem[]>(
+        `/reports/bk?${params.toString()}`
+      );
+      const reported = new Set(data.map((r) => r.restaurant_code));
+      const missing = restaurants.filter((r) => !reported.has(r.code));
+      setDailyStatus({ loading: false, missing, date: today, error: null, noRestaurants: false });
+    } catch (e: any) {
+      setDailyStatus({
+        loading: false,
+        missing: [],
+        date: today,
+        error: e?.message ?? "Erreur chargement import du jour",
+        noRestaurants: false,
+      });
+    }
+  }
 
-    (async () => {
-      if (restaurants.length === 0) {
-        setDailyStatus({
-          loading: false,
-          missing: [],
-          date: today,
-          error: null,
-          noRestaurants: true,
-        });
-        return;
-      }
-      setDailyStatus((prev) => ({ ...prev, loading: true, error: null, date: today }));
-      try {
-        const params = new URLSearchParams();
-        params.set("start_date", today);
-        params.set("end_date", today);
-        const data = await apiFetch<ReportListItem[]>(
-          `/reports/bk?${params.toString()}`
-        );
-        const reported = new Set(data.map((r) => r.restaurant_code));
-        const missing = restaurants.filter((r) => !reported.has(r.code));
-        setDailyStatus({ loading: false, missing, date: today, error: null, noRestaurants: false });
-      } catch (e: any) {
-        setDailyStatus({
-          loading: false,
-          missing: [],
-          date: today,
-          error: e?.message ?? "Erreur chargement import du jour",
-          noRestaurants: false,
-        });
-      }
-    })();
+  useEffect(() => {
+    refreshDailyStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canSeeDailyBanner, restaurants]);
 
   const monthLabel = useMemo(() => {
@@ -464,12 +468,13 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
               {displayName ? `Bonjour ${displayName} ! ` : ""}Ici tu retrouves ton accès et tes données quotidiennes.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            {me ? (
-              <div className="text-right">
-                <div className="text-sm">{me.email}</div>
-                <div className="text-xs text-muted-foreground flex items-center gap-2 justify-end">
-                  {roleBadge}
+        <div className="flex items-center gap-3">
+          {me ? (
+            <div className="text-right">
+              {displayName && <div className="text-lg font-bold">{displayName}</div>}
+              <div className="text-sm">{me.email}</div>
+              <div className="text-xs text-muted-foreground flex items-center gap-2 justify-end">
+                {roleBadge}
                   <span>id={me.id}</span>
                   <span>{me.is_active ? "active" : "inactive"}</span>
                 </div>
@@ -495,6 +500,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
             <TabsTrigger value="data">Mes données</TabsTrigger>
             {canViewGlobalBk && <TabsTrigger value="bk-global">BK global</TabsTrigger>}
             {canViewGlobalBk && <TabsTrigger value="bk-monthly">BK mensuel</TabsTrigger>}
+            {canViewGlobalBk && <TabsTrigger value="bk-compare">Comparaison</TabsTrigger>}
             {isDev && <TabsTrigger value="dev">Dev</TabsTrigger>}
           </TabsList>
 
@@ -807,7 +813,10 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
             <BkReportUploader
               restaurants={restaurants}
               canReplace={canReplaceImport}
-              onUploaded={(r) => setReport(r)}
+              onUploaded={(r) => {
+                setReport(r);
+                refreshDailyStatus();
+              }}
             />
 
             <BkReportView report={report} />
@@ -822,6 +831,11 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
           {canViewGlobalBk && (
             <TabsContent value="bk-monthly" className="space-y-4">
               <BkMonthlyRecap restaurants={restaurants} />
+            </TabsContent>
+          )}
+          {canViewGlobalBk && (
+            <TabsContent value="bk-compare" className="space-y-4">
+              <BkComparison restaurants={restaurants} />
             </TabsContent>
           )}
           {isDev && (
