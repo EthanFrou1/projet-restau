@@ -173,7 +173,7 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                 title="Supprimer cet utilisateur ?"
                 description={
                     confirmDeleteUser
-                    ? `Confirmer la suppression de ${confirmDeleteUser.label}. Cette action est irreversible.`
+                    ? `Confirmer la suppression de ${confirmDeleteUser.label}. Cette action est irréversible.`
                     : undefined
                 }
                 confirmLabel="Supprimer"
@@ -283,7 +283,7 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                             <CardContent className="space-y-4">
                             <div className="grid md:grid-cols-4 gap-4">
                                 <div>
-                                    <div className="text-xs text-muted-foreground mb-1">PrÃ©nom</div>
+                                    <div className="text-xs text-muted-foreground mb-1">Prénom</div>
                                     <Input
                                         value={newFirstName}
                                         onChange={(e) => setNewFirstName(e.target.value)}
@@ -433,7 +433,7 @@ export default function DevPanel({ onLoggedOut }: { onLoggedOut: () => void }) {
                                     {users.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={7} className="text-sm text-muted-foreground">
-                                        Aucun user chargé.
+                                        Aucun utilisateur chargé.
                                         </TableCell>
                                     </TableRow>
                                     ) : (

@@ -367,7 +367,7 @@ export function BkComparison({ restaurants }: { restaurants: Restaurant[] }) {
         </div>
 
         <div className="rounded-md border bg-muted/20 p-3">
-          <div className="text-xs text-muted-foreground mb-2">Donnees a remonter</div>
+          <div className="text-xs text-muted-foreground mb-2">Données à remonter</div>
           <div className="flex flex-wrap gap-3">
             {metricDefs.map((metric) => (
               <label key={metric.key} className="flex items-center gap-2 text-xs">

@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   Table,
   TableBody,
@@ -14,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import type { BKReport } from "@/components/bk/types";
 import { BkReportView } from "@/components/bk/BkReportView";
+import type { ReimportRequest } from "@/components/bk/uploader/types";
 
 type Restaurant = { id: number; code: string; name: string };
 type ReportListItem = {
@@ -33,7 +33,8 @@ type ReportListItem = {
 
 type Props = {
   restaurants: Restaurant[];
-  canDelete?: boolean;
+  canReimport?: boolean;
+  onReimportRequest?: (request: ReimportRequest) => void;
 };
 
 function toIsoDate(value: Date) {
@@ -48,7 +49,17 @@ function formatDateTime(value: string) {
   return parsed.toLocaleString("fr-FR");
 }
 
-export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
+function formatDateFr(value: string) {
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("fr-FR");
+}
+
+export function BkReportBrowser({
+  restaurants,
+  canReimport = false,
+  onReimportRequest,
+}: Props) {
   const today = useMemo(() => toIsoDate(new Date()), []);
   const defaultStart = useMemo(() => {
     const d = new Date();
@@ -65,8 +76,6 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedReport, setSelectedReport] = useState<BKReport | null>(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
   const canSelectRestaurant = restaurants.length > 1;
   const fixedRestaurantCode = restaurants.length === 1 ? restaurants[0].code : "";
@@ -84,12 +93,11 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
       if (finalRestaurantCode) params.set("restaurant_code", finalRestaurantCode);
 
       const query = params.toString();
-      const data = await apiFetch<ReportListItem[]>(
-        `/reports/bk${query ? `?${query}` : ""}`
-      );
+      const data = await apiFetch<ReportListItem[]>(`/reports/bk${query ? `?${query}` : ""}`);
       setItems(data);
-    } catch (e: any) {
-      setErr(e?.message ?? "Erreur chargement rapports");
+    } catch (e: unknown) {
+      const msg = e && typeof e === "object" && "message" in e ? (e as { message?: unknown }).message : null;
+      setErr(typeof msg === "string" && msg ? msg : "Erreur chargement rapports");
     } finally {
       setLoading(false);
     }
@@ -102,36 +110,11 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
     try {
       const data = await apiFetch<BKReport>(`/reports/bk/${reportId}`);
       setSelectedReport(data);
-    } catch (e: any) {
-      setErr(e?.message ?? "Erreur chargement rapport");
+    } catch (e: unknown) {
+      const msg = e && typeof e === "object" && "message" in e ? (e as { message?: unknown }).message : null;
+      setErr(typeof msg === "string" && msg ? msg : "Erreur chargement rapport");
     } finally {
       setSelectedLoading(false);
-    }
-  }
-
-  async function handleDelete(reportId: number) {
-    setConfirmDeleteId(reportId);
-  }
-
-  async function confirmDelete() {
-    if (confirmDeleteId === null) return;
-    const reportId = confirmDeleteId;
-    setDeletingId(reportId);
-    setErr(null);
-    try {
-      await apiFetch<{ status: string }>(`/reports/bk/${reportId}`, {
-        method: "DELETE",
-      });
-      if (selectedId === reportId) {
-        setSelectedId(null);
-        setSelectedReport(null);
-      }
-      await loadReports();
-    } catch (e: any) {
-      setErr(e?.message ?? "Erreur suppression rapport");
-    } finally {
-      setDeletingId(null);
-      setConfirmDeleteId(null);
     }
   }
 
@@ -149,24 +132,11 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Donnees globales BK</CardTitle>
+        <CardTitle>Historiques des imports BK</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <ConfirmDialog
-          open={confirmDeleteId !== null}
-          title="Supprimer cet import ?"
-          description={
-            confirmDeleteId !== null
-              ? `Confirmer la suppression de l'import #${confirmDeleteId}. Cette action est irreversible.`
-              : undefined
-          }
-          confirmLabel="Supprimer"
-          busy={confirmDeleteId !== null && deletingId === confirmDeleteId}
-          onCancel={() => setConfirmDeleteId(null)}
-          onConfirm={confirmDelete}
-        />
         <div className="text-sm text-muted-foreground">
-          Vue par jour des imports BK, avec filtre par semaine ou restaurant.
+          Liste des imports réalisés, avec filtres par période et restaurant.
         </div>
 
         <div className="grid gap-3 md:grid-cols-4">
@@ -210,8 +180,8 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Restaurant</TableHead>
-                <TableHead>Importe le</TableHead>
-                <TableHead>Importe par</TableHead>
+                <TableHead>Importé le</TableHead>
+                <TableHead>Importé par</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Commentaire</TableHead>
                 <TableHead className="w-[200px] text-right">Actions</TableHead>
@@ -221,72 +191,59 @@ export function BkReportBrowser({ restaurants, canDelete = false }: Props) {
               {items.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-sm text-muted-foreground">
-                    Aucun rapport pour cette periode.
+                    Aucun rapport pour cette période.
                   </TableCell>
                 </TableRow>
               ) : (
                 items.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-mono text-xs">{item.report_date}</TableCell>
-                      <TableCell className="font-mono text-xs">{item.restaurant_code}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {formatDateTime(item.created_at)}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {(() => {
-                          const user = item.imported_by;
-                          if (!user) return "—";
-                          const full = `${user.first_name || ""} ${user.last_name || ""}`.trim();
-                          return full || user.email;
-                        })()}
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {item.is_reimport ? "Réimport" : "Import"}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground max-w-[260px] truncate">
-                        {item.comment || "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                  <TableRow key={item.id}>
+                    <TableCell className="font-mono text-xs">{formatDateFr(item.report_date)}</TableCell>
+                    <TableCell className="font-mono text-xs">{item.restaurant_code}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{formatDateTime(item.created_at)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {(() => {
+                        const user = item.imported_by;
+                        if (!user) return "—";
+                        const full = `${user.first_name || ""} ${user.last_name || ""}`.trim();
+                        return full || user.email;
+                      })()}
+                    </TableCell>
+                    <TableCell className="text-xs">{item.is_reimport ? "Réimport" : "Import"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-[260px] truncate">
+                      {item.comment || "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant={selectedId === item.id ? "secondary" : "outline"}
+                          size="sm"
+                          onClick={() => loadReportDetails(item.id)}
+                        >
+                          {selectedId === item.id && selectedLoading ? "Chargement..." : "Voir"}
+                        </Button>
+                        {canReimport && (
                           <Button
-                            variant={selectedId === item.id ? "secondary" : "outline"}
                             size="sm"
-                            onClick={() => loadReportDetails(item.id)}
+                            onClick={() =>
+                              onReimportRequest?.({
+                                reportId: item.id,
+                                restaurantCode: item.restaurant_code,
+                                reportDate: item.report_date,
+                              })
+                            }
                           >
-                            {selectedId === item.id && selectedLoading ? "Chargement..." : "Voir"}
+                            Réimporter
                           </Button>
-                          {canDelete && (
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              disabled={deletingId === item.id}
-                              onClick={() => handleDelete(item.id)}
-                            >
-                              {deletingId === item.id ? "Suppression..." : "Supprimer"}
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
               )}
             </TableBody>
           </Table>
         </div>
-
-        <div className="pt-2">
-          {selectedReport ? (
-            <BkReportView report={selectedReport} />
-          ) : selectedId ? (
-            <div className="text-sm text-muted-foreground">
-              Chargement du rapport...
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">
-              Selectionne une ligne pour afficher les donnees du jour.
-            </div>
-          )}
-        </div>
+        
       </CardContent>
     </Card>
   );

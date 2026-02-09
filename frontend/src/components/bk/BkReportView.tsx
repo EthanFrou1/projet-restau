@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+﻿import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -13,15 +13,21 @@ type Props = {
   report: BKReport | null;
 };
 
+function formatDateFr(value: string) {
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("fr-FR");
+}
+
 export function BkReportView({ report }: Props) {
   if (!report) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Donnees importees</CardTitle>
+          <CardTitle>Données importées</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          Aucun import pour l'instant.
+          Aucun import pour l’instant.
         </CardContent>
       </Card>
     );
@@ -90,11 +96,11 @@ export function BkReportView({ report }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Donnees importees</CardTitle>
+        <CardTitle>Données importées</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
+        <CardContent className="space-y-6">
         <div className="text-sm text-muted-foreground">
-          Rapport BK {report.report_date} — {report.restaurant_code}
+          Rapport BK {formatDateFr(report.report_date)} — {report.restaurant_code}
         </div>
         {(report.comment || report.comment_n1) && (
           <div className="space-y-2">
@@ -178,7 +184,7 @@ export function BkReportView({ report }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Libelle</TableHead>
+                  <TableHead>Libellé</TableHead>
                   <TableHead>HT</TableHead>
                   <TableHead>TVA</TableHead>
                   <TableHead>TTC</TableHead>
@@ -199,16 +205,16 @@ export function BkReportView({ report }: Props) {
         </div>
 
         <div className="space-y-2">
-          <div className="text-sm font-medium">Reglements</div>
+          <div className="text-sm font-medium">Règlements</div>
           <div className="rounded-md border overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Type</TableHead>
-                  <TableHead>Theorique</TableHead>
-                  <TableHead>Preleve</TableHead>
+                  <TableHead>Théorique</TableHead>
+                  <TableHead>Prélevé</TableHead>
                   <TableHead>Compte</TableHead>
-                  <TableHead>Ecart</TableHead>
+                  <TableHead>Écart</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -253,7 +259,7 @@ export function BkReportView({ report }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Libelle</TableHead>
+                  <TableHead>Libellé</TableHead>
                   <TableHead>Nbr</TableHead>
                   <TableHead>HT</TableHead>
                   <TableHead>TTC</TableHead>
@@ -276,3 +282,4 @@ export function BkReportView({ report }: Props) {
     </Card>
   );
 }
+

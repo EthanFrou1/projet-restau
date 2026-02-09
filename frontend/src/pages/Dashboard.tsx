@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { ArrowDownRight, ArrowUpRight, BarChart3, Database, LayoutDashboard, LogOut, Shield } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, BarChart3, Database, LayoutDashboard, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,10 @@ import { getMyRestaurants, listUsersWithRestaurants, setUserRestaurants } from "
 import { RestaurantManager } from "@/components/admin/RestaurantManager";
 import { UserRestaurantAssign } from "@/components/admin/UserRestaurantAssign";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { DailyImportBanner } from "@/components/dashboard/DailyImportBanner";
+import type { ReimportRequest } from "@/components/bk/uploader/types";
 import {
   Table,
   TableBody,
@@ -146,6 +150,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
     error: string | null;
     noRestaurants: boolean;
   }>({ loading: false, missing: [], date: null, error: null, noRestaurants: false });
+  const [pendingReimport, setPendingReimport] = useState<ReimportRequest | null>(null);
 
   async function loadMe() {
     setErr(null);
@@ -180,10 +185,11 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
   }, [me]);
 
   const isDev = me?.role === "DEV";
+  const canImportData = me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV";
   const canSeeDailyBanner = me?.role === "MANAGER" || me?.role === "DEV";
   const canViewGlobalBk =
     me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV" || me?.role === "READONLY";
-  const canDeleteBk = me?.role === "ADMIN" || me?.role === "DEV";
+  const canReimportFromHistory = me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV";
   const canReplaceImport = me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV";
   const containerClass = "mx-auto w-full space-y-6";
   const pageSize = 10;
@@ -194,8 +200,8 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
     () =>
       [
         { value: "overview", label: "Dashboard", icon: LayoutDashboard },
-        { value: "data", label: "Mes imports", icon: Database },
-        canViewGlobalBk ? { value: "bk-global", label: "BK global", icon: BarChart3 } : null,
+        canImportData ? { value: "data", label: "Mes imports", icon: Database } : null,
+        canViewGlobalBk ? { value: "bk-global", label: "Historiques des imports", icon: BarChart3 } : null,
         canViewGlobalBk ? { value: "bk-monthly", label: "BK mensuel", icon: BarChart3 } : null,
         canViewGlobalBk ? { value: "bk-compare", label: "Comparaison", icon: BarChart3 } : null,
         isDev ? { value: "dev", label: "Dev", icon: Shield } : null,
@@ -208,12 +214,33 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
           icon: typeof LayoutDashboard;
         } => Boolean(item)
       ),
-    [canViewGlobalBk, isDev]
+    [canImportData, canViewGlobalBk, isDev]
   );
   const activeTabLabel = useMemo(
     () => navItems.find((item) => item.value === activeTab)?.label ?? "Dashboard",
     [activeTab, navItems]
   );
+  const activeTabDescription = useMemo(() => {
+    if (activeTab === "overview") {
+      return `${displayName ? `Bonjour ${displayName} ! ` : ""}Ici tu retrouves ton accès et tes données quotidiennes.`;
+    }
+    if (activeTab === "data") {
+      return "Suis les imports à faire aujourd'hui, traite les retards par date, puis valide les CSV restaurant par restaurant.";
+    }
+    if (activeTab === "bk-global") {
+      return "Retrouve la liste des imports réalisés et relance un réimport si nécessaire.";
+    }
+    if (activeTab === "bk-monthly") {
+      return "Consulte le récapitulatif mensuel détaillé avec les indicateurs de comparaison.";
+    }
+    if (activeTab === "bk-compare") {
+      return "Compare deux périodes pour suivre les écarts de performance par indicateur.";
+    }
+    if (activeTab === "dev") {
+      return "Administre les utilisateurs, les rôles et les associations restaurants.";
+    }
+    return "";
+  }, [activeTab, displayName]);
 
   async function loadDevUsers() {
     setDevUsersLoading(true);
@@ -248,13 +275,14 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
 
   useEffect(() => {
     const devTabHidden = activeTab === "dev" && !isDev;
+    const dataTabHidden = activeTab === "data" && !canImportData;
     const globalTabHidden =
       (activeTab === "bk-global" || activeTab === "bk-monthly" || activeTab === "bk-compare") &&
       !canViewGlobalBk;
-    if (devTabHidden || globalTabHidden) {
+    if (devTabHidden || dataTabHidden || globalTabHidden) {
       setActiveTab("overview");
     }
-  }, [activeTab, canViewGlobalBk, isDev]);
+  }, [activeTab, canImportData, canViewGlobalBk, isDev]);
 
   function updateAssocUser(userId: number, nextCodes: string[]) {
     setAssocUsers((prev) =>
@@ -312,7 +340,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
   }, [dashScope, dashYear, dashMonth, dashRestaurant]);
 
   async function refreshDailyStatus() {
-    if (!canSeeDailyBanner) return;
+    if (!canImportData) return;
     if (!restaurants) return;
     const today = toIsoDate(new Date());
     if (restaurants.length === 0) {
@@ -350,7 +378,9 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
   useEffect(() => {
     refreshDailyStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canSeeDailyBanner, restaurants]);
+  }, [canImportData, restaurants]);
+
+  const importsTodoCount = canImportData ? dailyStatus.missing.length : 0;
 
   const monthLabel = useMemo(() => {
     const monthIdx = Number(dashMonth) - 1;
@@ -655,7 +685,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
         first_name: newFirstName.trim() || null,
         last_name: newLastName.trim() || null,
       });
-      setCreateMsg(`Utilisateur cree: ${res.email} (${res.role})`);
+      setCreateMsg(`Utilisateur créé: ${res.email} (${res.role})`);
       setNewFirstName("");
       setNewLastName("");
       setNewEmail("");
@@ -664,7 +694,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
       setNewRole("READONLY");
       await loadDevUsers();
     } catch (e: any) {
-      setCreateMsg(`Erreur: ${e?.message ?? "Erreur creation utilisateur"}`);
+      setCreateMsg(`Erreur: ${e?.message ?? "Erreur création utilisateur"}`);
     }
   }
 
@@ -684,7 +714,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
           title="Supprimer cet utilisateur ?"
           description={
             confirmDeleteUser
-              ? `Confirmer la suppression de ${confirmDeleteUser.label}. Cette action est irreversible.`
+              ? `Confirmer la suppression de ${confirmDeleteUser.label}. Cette action est irréversible.`
               : undefined
           }
           confirmLabel="Supprimer"
@@ -697,76 +727,24 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
             await loadDevUsers();
           }}
         />
-        <aside className="border-b border-slate-500/40 bg-gradient-to-b from-slate-800 via-slate-700 to-zinc-800 text-slate-100 md:sticky md:top-0 md:h-screen md:w-72 md:flex-shrink-0 md:self-start md:border-b-0 md:border-r">
-          <div className="flex h-full flex-col p-4 md:p-6">
-            <div className="space-y-2">
-              <div className="text-xl font-semibold tracking-tight">Projet Restau</div>
-              <div className="text-sm text-slate-300">Gestion et suivi des rapports</div>
-            </div>
-
-            <nav className="mt-6 grid gap-2">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.value;
-                return (
-                  <Button
-                    key={item.value}
-                    variant="ghost"
-                    className={
-                      isActive
-                        ? "h-11 justify-start gap-2 bg-white/25 text-white hover:bg-white/30"
-                        : "h-11 justify-start gap-2 text-slate-100 hover:bg-white/15 hover:text-white"
-                    }
-                    onClick={() => setActiveTab(item.value)}
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </Button>
-                );
-              })}
-            </nav>
-
-            <div className="mt-auto space-y-3 pt-6">
-              {me ? (
-                <div className="rounded-xl border border-white/25 bg-white/15 p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/25 text-lg font-semibold">
-                      {displayName.slice(0, 1).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      {displayName && <div className="text-base font-semibold leading-tight">{displayName}</div>}
-                      <div className="text-sm font-medium text-slate-300">{me.role}</div>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <Badge variant="outline" className="w-fit border-white/20 text-white">
-                  {loading ? "Loading..." : "Not logged"}
-                </Badge>
-              )}
-            </div>
-          </div>
-        </aside>
+        <DashboardSidebar
+          activeTab={activeTab}
+          navItems={navItems}
+          me={me ? { role: me.role } : null}
+          displayName={displayName}
+          loading={loading}
+          importsTodoCount={importsTodoCount}
+          onTabChange={(tab) => setActiveTab(tab as TabValue)}
+        />
 
         <main className="min-w-0 flex-1 px-4 py-4 md:px-6 md:py-6 lg:px-8">
           <div className={`${containerClass} min-w-0`}>
-            <header className="space-y-4 px-1 py-1">
-              <div className="flex items-center justify-end gap-2">
-                {roleBadge}
-                <Button variant="outline" className="gap-2" onClick={handleLogout}>
-                  <LogOut className="h-4 w-4" />
-                  Déconnexion
-                </Button>
-              </div>
-              <div className="space-y-1">
-                <h1 className="text-3xl font-semibold tracking-tight">{activeTabLabel}</h1>
-                {activeTab === "overview" && (
-                  <p className="text-sm text-muted-foreground">
-                    {displayName ? `Bonjour ${displayName} ! ` : ""}Ici tu retrouves ton accès et tes données quotidiennes.
-                  </p>
-                )}
-              </div>
-            </header>
+            <DashboardHeader
+              roleBadge={roleBadge}
+              activeTabLabel={activeTabLabel}
+              activeTabDescription={activeTabDescription}
+              onLogout={handleLogout}
+            />
 
             {err && (
               <Card className="border-destructive/40">
@@ -777,47 +755,13 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
               </Card>
             )}
 
+            {/* Overview: KPI dashboard and analytics visualizations */}
             <TabsContent value="overview" className="space-y-4">
-              {canSeeDailyBanner && (
-              <Card className="border-amber-200 bg-amber-50/60">
-                <CardContent className="pt-4 space-y-2">
-                  {dailyStatus.loading ? (
-                    <div className="text-sm text-muted-foreground">
-                      Vérification de l'import du jour...
-                    </div>
-                  ) : dailyStatus.error ? (
-                    <div className="text-sm text-destructive">
-                      {dailyStatus.error}
-                    </div>
-                  ) : dailyStatus.noRestaurants ? (
-                    <div className="text-sm text-muted-foreground">
-                      Aucun restaurant associé à ton compte.
-                    </div>
-                  ) : dailyStatus.missing.length === 0 ? (
-                    <div className="text-sm">
-                      Import du jour OK pour tous les restaurants
-                      {dailyStatus.date ? ` (${dailyStatus.date})` : ""}.
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                      <div className="text-sm">
-                        Import du jour manquant
-                        {dailyStatus.date ? ` (${dailyStatus.date})` : ""} pour :{" "}
-                        <span className="font-medium">
-                          {dailyStatus.missing.map((r) => r.code).join(", ")}
-                        </span>
-                      </div>
-                      <Button
-                        variant="outline"
-                        onClick={() => setActiveTab("data")}
-                      >
-                        Importer maintenant
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+              <DailyImportBanner
+                visible={canSeeDailyBanner}
+                status={dailyStatus}
+                onImportNow={() => setActiveTab("data")}
+              />
             <Card>
               <CardHeader>
                 <CardTitle className="text-xl md:text-2xl">Filtres</CardTitle>
@@ -1232,35 +1176,51 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
               </CardContent>
             </Card>
           </TabsContent>
-          <TabsContent value="data" className="space-y-4">
-            <BkReportUploader
-              restaurants={restaurants}
-              canReplace={canReplaceImport}
-              onUploaded={(r) => {
-                setReport(r);
-                refreshDailyStatus();
-              }}
-            />
+          {/* Data: operational imports (uploader + selected report preview) */}
+          {canImportData && (
+            <TabsContent value="data" className="space-y-4">
+              <BkReportUploader
+                restaurants={restaurants}
+                canReplace={canReplaceImport}
+                pendingReimport={pendingReimport}
+                onPendingReimportHandled={() => setPendingReimport(null)}
+                onUploaded={(r) => {
+                  setReport(r);
+                  refreshDailyStatus();
+                }}
+              />
 
-            <BkReportView report={report} />
-          </TabsContent>
-
-          {canViewGlobalBk && (
-            <TabsContent value="bk-global" className="space-y-4">
-              <BkReportBrowser restaurants={restaurants} canDelete={canDeleteBk} />
+              <BkReportView report={report} />
             </TabsContent>
           )}
 
+          {/* Global BK browsing */}
+          {canViewGlobalBk && (
+            <TabsContent value="bk-global" className="space-y-4">
+              <BkReportBrowser
+                restaurants={restaurants}
+                canReimport={canReimportFromHistory}
+                onReimportRequest={(request) => {
+                  setPendingReimport(request);
+                  setActiveTab("data");
+                }}
+              />
+            </TabsContent>
+          )}
+
+          {/* Monthly recap */}
           {canViewGlobalBk && (
             <TabsContent value="bk-monthly" className="space-y-4">
               <BkMonthlyRecap restaurants={restaurants} />
             </TabsContent>
           )}
+          {/* Period comparison */}
           {canViewGlobalBk && (
             <TabsContent value="bk-compare" className="space-y-4">
               <BkComparison restaurants={restaurants} />
             </TabsContent>
           )}
+          {/* Dev administration */}
           {isDev && (
           <TabsContent value="dev" className="space-y-4">
             <div className="grid gap-4 xl:grid-cols-2">
@@ -1340,8 +1300,8 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                 {createMsg && <div className="text-sm whitespace-pre-wrap">{createMsg}</div>}
                 <div className="text-sm md:text-base text-muted-foreground">
                   {devUsers.length === 0
-                    ? "Aucun user charge."
-                    : `${devUsers.length} utilisateur(s) charge(s).`}
+                    ? "Aucun utilisateur chargé."
+                    : `${devUsers.length} utilisateur(s) chargé(s).`}
                 </div>
 
                 <div className="rounded-md border overflow-hidden">
@@ -1361,7 +1321,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                       {devUsers.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-sm text-muted-foreground">
-                            Aucun user charge.
+                            Aucun utilisateur chargé.
                           </TableCell>
                         </TableRow>
                       ) : (
@@ -1519,10 +1479,3 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
     </div>
   );
 }
-
-
-
-
-
-
-

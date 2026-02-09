@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -76,7 +76,7 @@ export function UserRestaurantAssign({ users, onSaved }: Props) {
   async function save() {
     setMsg(null);
     if (!selectedUserId) {
-      setMsg("❌ Selectionne un utilisateur.");
+      setMsg("❌ Sélectionne un utilisateur.");
       return;
     }
     if (selectedCodes.length === 0) {
@@ -90,7 +90,7 @@ export function UserRestaurantAssign({ users, onSaved }: Props) {
         [Number(selectedUserId)]: selectedCodes,
       }));
       onSaved?.(Number(selectedUserId), selectedCodes);
-      setMsg("✅ Associations mises a jour.");
+      setMsg("✅ Associations mises à jour.");
     } catch (e: any) {
       setMsg(`❌ ${e?.message ?? "Erreur"}`);
     }
@@ -99,7 +99,7 @@ export function UserRestaurantAssign({ users, onSaved }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Associer users → restaurants (DEV)</CardTitle>
+        <CardTitle className="text-base">Associer utilisateurs → restaurants (DEV)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="space-y-2">
@@ -110,7 +110,7 @@ export function UserRestaurantAssign({ users, onSaved }: Props) {
             onChange={(e) => setSelectedUserId(e.target.value ? Number(e.target.value) : "")}
             disabled={loadingUsers}
           >
-            <option value="">Selectionner...</option>
+            <option value="">Sélectionner...</option>
             {users.map((u) => (
               <option key={u.id} value={u.id}>
                 {(u.first_name || u.last_name
@@ -197,3 +197,4 @@ export function UserRestaurantAssign({ users, onSaved }: Props) {
     </Card>
   );
 }
+

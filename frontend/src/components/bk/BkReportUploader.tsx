@@ -1,214 +1,279 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { AlertTriangle, CheckCircle2, RotateCcw } from "lucide-react";
+import { ImportModal } from "@/components/bk/uploader/ImportModal";
+import { OverdueImportsCard } from "@/components/bk/uploader/OverdueImportsCard";
+import { QuickStatsCard } from "@/components/bk/uploader/QuickStatsCard";
+import { TodayImportsCard } from "@/components/bk/uploader/TodayImportsCard";
 import type { BKReport } from "@/components/bk/types";
-
-type Restaurant = { id: number; code: string; name: string };
-type ReportListItem = {
-  id: number;
-  restaurant_code: string;
-  report_date: string;
-  created_at: string;
-};
+import type {
+  FileSpec,
+  OverdueGroup,
+  OverdueRow,
+  ReimportRequest,
+  ReportListItem,
+  Restaurant,
+  TodayRow,
+} from "@/components/bk/uploader/types";
+import {
+  diffDaysInclusive,
+  emptyFileErrors,
+  emptyFiles,
+  FILE_SPECS,
+  getErrorMessage,
+  isExpectedFileName,
+  listDatesInclusive,
+  previousIsoDate,
+  toIsoDate,
+} from "@/components/bk/uploader/utils";
 
 type Props = {
   restaurants: Restaurant[];
   onUploaded: (report: BKReport) => void;
   canReplace?: boolean;
+  pendingReimport?: ReimportRequest | null;
+  onPendingReimportHandled?: () => void;
 };
 
-function toIsoDate(value: Date) {
-  const offset = value.getTimezoneOffset();
-  const local = new Date(value.getTime() - offset * 60_000);
-  return local.toISOString().slice(0, 10);
-}
-
-function formatTime(value: string) {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-}
-
-export function BkReportUploader({ restaurants, onUploaded, canReplace = false }: Props) {
+export function BkReportUploader({
+  restaurants,
+  onUploaded,
+  canReplace = false,
+  pendingReimport = null,
+  onPendingReimportHandled,
+}: Props) {
   const today = useMemo(() => toIsoDate(new Date()), []);
-  const [reportDate, setReportDate] = useState(() => toIsoDate(new Date()));
-  const [restaurantCode, setRestaurantCode] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [yearlyMissing, setYearlyMissing] = useState(0);
+  const [yearlyMissingLoading, setYearlyMissingLoading] = useState(false);
+  const [overdueGroups, setOverdueGroups] = useState<OverdueGroup[]>([]);
+  const [overdueLoading, setOverdueLoading] = useState(false);
+
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [reportsByCode, setReportsByCode] = useState<Record<string, ReportListItem>>({});
-  const [replaceTarget, setReplaceTarget] = useState<{ code: string; reportId: number } | null>(null);
-  const [replaceMode, setReplaceMode] = useState<{ code: string; reportId: number } | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Modal state kept centralized here: components are pure UI.
+  const [selectedCode, setSelectedCode] = useState<string | null>(null);
+  const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
+  const [modalDate, setModalDate] = useState(today);
+  const [replaceMode, setReplaceMode] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [commentDraft, setCommentDraft] = useState("");
+  const [files, setFiles] = useState(emptyFiles());
+  const [fileErrors, setFileErrors] = useState(emptyFileErrors());
 
-  const [fileCaparprofit, setFileCaparprofit] = useState<File | null>(null);
-  const [fileConsommation, setFileConsommation] = useState<File | null>(null);
-  const [fileCorrections, setFileCorrections] = useState<File | null>(null);
-  const [fileDivers, setFileDivers] = useState<File | null>(null);
-  const [fileReglement, setFileReglement] = useState<File | null>(null);
-  const [fileRemises, setFileRemises] = useState<File | null>(null);
-  const [fileTva, setFileTva] = useState<File | null>(null);
-  const [fileVenteAnnexes, setFileVenteAnnexes] = useState<File | null>(null);
+  const [newestFirst, setNewestFirst] = useState(true);
 
-  const finalCode = restaurantCode.trim().toUpperCase();
-  const selectedReport = finalCode ? reportsByCode[finalCode] : undefined;
-  const allFilesSelected = !!(
-    fileCaparprofit &&
-    fileConsommation &&
-    fileCorrections &&
-    fileDivers &&
-    fileReglement &&
-    fileRemises &&
-    fileTva &&
-    fileVenteAnnexes
-  );
-  const canSubmit =
-    !!reportDate &&
-    !!finalCode &&
-    allFilesSelected &&
-    !uploading &&
-    (!selectedReport || (replaceMode && replaceMode.code === finalCode));
+  const fileCount = useMemo(() => Object.values(files).filter(Boolean).length, [files]);
+  const totalSteps = FILE_SPECS.length;
+  const progressPercent = Math.round((fileCount / totalSteps) * 100);
+  const allFilesSelected = fileCount === totalSteps;
 
-  const missingRestaurants = useMemo(
-    () => restaurants.filter((r) => !reportsByCode[r.code]),
-    [restaurants, reportsByCode]
-  );
-  const doneRestaurants = useMemo(
-    () => restaurants.filter((r) => reportsByCode[r.code]),
-    [restaurants, reportsByCode]
-  );
+  const todayRows = useMemo<TodayRow[]>(() => {
+    return restaurants
+      .map((restaurant) => {
+        const report = reportsByCode[restaurant.code];
+        return { restaurant, report, isDone: Boolean(report) };
+      })
+      .sort((a, b) => a.restaurant.code.localeCompare(b.restaurant.code));
+  }, [reportsByCode, restaurants]);
 
-  function resetFiles() {
-    setFileCaparprofit(null);
-    setFileConsommation(null);
-    setFileCorrections(null);
-    setFileDivers(null);
-    setFileReglement(null);
-    setFileRemises(null);
-    setFileTva(null);
-    setFileVenteAnnexes(null);
-  }
+  const overdueRows = useMemo<OverdueRow[]>(() => {
+    const flat = overdueGroups.flatMap((group) =>
+      group.restaurants.map((restaurant) => ({ date: group.date, restaurant }))
+    );
+    return flat.sort((a, b) =>
+      newestFirst ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)
+    );
+  }, [newestFirst, overdueGroups]);
 
-  function selectRestaurant(code: string) {
-    setRestaurantCode(code);
-    setUploadMsg(null);
-    setReplaceMode(null);
-    setCommentDraft("");
-    resetFiles();
-  }
+  const doneCount = todayRows.filter((r) => r.isDone).length;
+  const pendingCount = todayRows.filter((r) => !r.isDone).length;
 
-  async function loadStatus(dateValue: string) {
-    if (!dateValue) return;
-    if (dateValue > today) {
-      setReportsByCode({});
-      setStatusError("La date ne peut pas etre dans le futur.");
-      return;
-    }
+  const selectedRestaurant = selectedCode
+    ? restaurants.find((r) => r.code === selectedCode) ?? null
+    : null;
+
+  // Fetch today's report map to drive the "imports à faire aujourd'hui" table.
+  const loadTodayStatus = useCallback(async () => {
     if (restaurants.length === 0) {
       setReportsByCode({});
       return;
     }
+
     setStatusLoading(true);
     setStatusError(null);
     try {
-      const params = new URLSearchParams();
-      params.set("start_date", dateValue);
-      params.set("end_date", dateValue);
+      const params = new URLSearchParams({ start_date: today, end_date: today });
       const data = await apiFetch<ReportListItem[]>(`/reports/bk?${params.toString()}`);
       const map: Record<string, ReportListItem> = {};
       data.forEach((row) => {
         map[row.restaurant_code] = row;
       });
       setReportsByCode(map);
-    } catch (e: any) {
-      setStatusError(e?.message ?? "Erreur chargement statut import");
+    } catch (error: unknown) {
+      setStatusError(getErrorMessage(error, "Erreur chargement statut import"));
     } finally {
       setStatusLoading(false);
     }
-  }
+  }, [restaurants.length, today]);
+
+  // Compute yearly missing count and the per-day overdue list in one pass.
+  const loadYearlyAndOverdue = useCallback(async () => {
+    if (restaurants.length === 0) {
+      setYearlyMissing(0);
+      setOverdueGroups([]);
+      return;
+    }
+
+    setYearlyMissingLoading(true);
+    setOverdueLoading(true);
+    try {
+      const yearStart = `${today.slice(0, 4)}-01-01`;
+      const params = new URLSearchParams({ start_date: yearStart, end_date: today });
+      const data = await apiFetch<ReportListItem[]>(`/reports/bk?${params.toString()}`);
+
+      const assigned = new Set(restaurants.map((r) => r.code));
+      const restaurantByCode = new Map(restaurants.map((r) => [r.code, r]));
+      const importedByDay = new Set<string>();
+      data.forEach((row) => {
+        if (assigned.has(row.restaurant_code)) {
+          importedByDay.add(`${row.report_date}|${row.restaurant_code}`);
+        }
+      });
+
+      const expectedImports = diffDaysInclusive(yearStart, today) * restaurants.length;
+      setYearlyMissing(Math.max(0, expectedImports - importedByDay.size));
+
+      const dates = listDatesInclusive(yearStart, previousIsoDate(today));
+      const groups: OverdueGroup[] = [];
+      dates.forEach((date) => {
+        const missingRestaurants: Restaurant[] = [];
+        restaurants.forEach((r) => {
+          if (!importedByDay.has(`${date}|${r.code}`)) {
+            const full = restaurantByCode.get(r.code);
+            if (full) missingRestaurants.push(full);
+          }
+        });
+        if (missingRestaurants.length > 0) {
+          groups.push({ date, restaurants: missingRestaurants });
+        }
+      });
+      groups.sort((a, b) => b.date.localeCompare(a.date));
+      setOverdueGroups(groups);
+    } catch {
+      setYearlyMissing(0);
+      setOverdueGroups([]);
+    } finally {
+      setYearlyMissingLoading(false);
+      setOverdueLoading(false);
+    }
+  }, [restaurants, today]);
 
   useEffect(() => {
-    if (!reportDate) return;
-    loadStatus(reportDate);
-    setRestaurantCode("");
-    setReplaceMode(null);
-    setUploadMsg(null);
-    setCommentDraft("");
-    resetFiles();
-  }, [reportDate, restaurants]);
+    loadTodayStatus();
+    loadYearlyAndOverdue();
+  }, [loadTodayStatus, loadYearlyAndOverdue]);
 
-  async function handleUpload(comment?: string) {
+  useEffect(() => {
+    if (!pendingReimport) return;
+    openImportModal(
+      pendingReimport.restaurantCode,
+      true,
+      pendingReimport.reportDate,
+      pendingReimport.reportId
+    );
+    onPendingReimportHandled?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingReimport]);
+
+  function openImportModal(
+    code: string,
+    forceReplace: boolean,
+    dateValue = today,
+    reportId: number | null = null
+  ) {
+    setSelectedCode(code);
+    setSelectedReportId(reportId);
+    setModalDate(dateValue);
+    setReplaceMode(forceReplace);
+    setCommentDraft("");
+    setFiles(emptyFiles());
+    setFileErrors(emptyFileErrors());
     setUploadMsg(null);
-    const finalCode = restaurantCode.trim().toUpperCase();
-    if (!reportDate) {
-      setUploadMsg("❌ Date manquante.");
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    if (uploading) return;
+    setModalOpen(false);
+    setSelectedCode(null);
+    setSelectedReportId(null);
+    setModalDate(today);
+    setReplaceMode(false);
+    setCommentDraft("");
+    setFiles(emptyFiles());
+    setFileErrors(emptyFileErrors());
+  }
+
+  function handleFileSelected(spec: FileSpec, selected: File | null) {
+    if (!selected) {
+      setFiles((prev) => ({ ...prev, [spec.id]: null }));
+      setFileErrors((prev) => ({ ...prev, [spec.id]: null }));
       return;
     }
-    if (reportDate > today) {
-      setUploadMsg("❌ La date ne peut pas etre dans le futur.");
+
+    if (!isExpectedFileName(selected.name, spec.label)) {
+      setFiles((prev) => ({ ...prev, [spec.id]: null }));
+      setFileErrors((prev) => ({
+        ...prev,
+        [spec.id]:
+          `Nom invalide. Attendu : ${spec.label}. ` +
+          `Tolère maj/min, espaces ou tirets. Exemple valide : ${spec.label}`,
+      }));
       return;
     }
-    if (!finalCode) {
-      setUploadMsg("❌ Code restaurant manquant.");
+
+    setFiles((prev) => ({ ...prev, [spec.id]: selected }));
+    setFileErrors((prev) => ({ ...prev, [spec.id]: null }));
+  }
+
+  async function submitImport() {
+    if (!selectedCode || !allFilesSelected || modalDate > today) {
+      setUploadMsg("Date invalide ou fichiers incomplets.");
       return;
     }
-    if (
-      !fileCaparprofit ||
-      !fileConsommation ||
-      !fileCorrections ||
-      !fileDivers ||
-      !fileReglement ||
-      !fileRemises ||
-      !fileTva ||
-      !fileVenteAnnexes
-    ) {
-      setUploadMsg("❌ Tous les CSV BK doivent être fournis.");
+
+    const todayReport = modalDate === today ? reportsByCode[selectedCode] : undefined;
+    if (todayReport && !replaceMode) {
+      setUploadMsg("Import déjà fait pour ce restaurant. Utilise réimporter.");
       return;
     }
-    if (selectedReport && !(replaceMode && replaceMode.code === finalCode)) {
-      setUploadMsg("❌ Import déjà fait. Utilise réimporter pour remplacer.");
+    if (replaceMode && !selectedReportId) {
+      setUploadMsg("Réimport impossible: import existant introuvable.");
       return;
     }
 
     setUploading(true);
+    setUploadMsg(null);
     try {
-      if (replaceMode && replaceMode.code === finalCode) {
-        await apiFetch<{ status: string }>(`/reports/bk/${replaceMode.reportId}`, {
-          method: "DELETE",
-        });
+      if (replaceMode && selectedReportId) {
+        await apiFetch<{ status: string }>(`/reports/bk/${selectedReportId}`, { method: "DELETE" });
       }
 
       const fd = new FormData();
-      fd.append("report_date", reportDate);
-      fd.append("restaurant_code", finalCode);
-      if (comment) {
-        fd.append("comment", comment);
+      fd.append("report_date", modalDate);
+      fd.append("restaurant_code", selectedCode);
+      if (commentDraft.trim()) fd.append("comment", commentDraft.trim());
+      if (replaceMode && selectedReportId) fd.append("is_reimport", "true");
+
+      for (const spec of FILE_SPECS) {
+        const file = files[spec.id];
+        if (!file) throw new Error(`Fichier manquant: ${spec.label}`);
+        fd.append(spec.formKey, file, spec.label);
       }
-      if (replaceMode && replaceMode.code === finalCode) {
-        fd.append("is_reimport", "true");
-      }
-      fd.append("caparprofit", fileCaparprofit);
-      fd.append("consommationparprofit", fileConsommation);
-      fd.append("corrections", fileCorrections);
-      fd.append("divers", fileDivers);
-      fd.append("reglement", fileReglement);
-      fd.append("remises", fileRemises);
-      fd.append("tva", fileTva);
-      fd.append("vente_annexes", fileVenteAnnexes);
 
       const res = await apiFetch<{ report_id: number }>("/reports/bk/upload", {
         method: "POST",
@@ -217,315 +282,64 @@ export function BkReportUploader({ restaurants, onUploaded, canReplace = false }
 
       const data = await apiFetch<BKReport>(`/reports/bk/${res.report_id}`);
       onUploaded(data);
-      setUploadMsg(replaceMode ? "✅ Import remplacé." : "✅ Import terminé.");
-      await loadStatus(reportDate);
-      setReplaceMode(null);
-      setCommentDraft("");
-      resetFiles();
-    } catch (e: any) {
-      setUploadMsg(`❌ ${e?.message ?? "Erreur import CSV"}`);
+      await loadTodayStatus();
+      await loadYearlyAndOverdue();
+      setUploadMsg(replaceMode ? "Réimport terminé." : "Import terminé.");
+      closeModal();
+    } catch (error: unknown) {
+      setUploadMsg(getErrorMessage(error, "Erreur import CSV"));
     } finally {
       setUploading(false);
     }
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Données quotidiennes</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <ConfirmDialog
-          open={Boolean(replaceTarget)}
-          title="Remplacer l'import existant ?"
-          description={
-            replaceTarget
-              ? `Cette action supprimera les données déjà importées pour ${replaceTarget.code} (${reportDate}).`
-              : undefined
-          }
-          confirmLabel="Supprimer et réimporter"
-          onCancel={() => setReplaceTarget(null)}
-          onConfirm={() => {
-            if (!replaceTarget) return;
-            setReplaceMode(replaceTarget);
-            setRestaurantCode(replaceTarget.code);
-            setReplaceTarget(null);
-          }}
-        />
-        {confirmOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-lg rounded-lg border bg-background shadow-lg">
-              <div className="space-y-3 p-4">
-                <h3 className="text-base font-semibold">Confirmer l'import</h3>
-                <div className="text-sm text-muted-foreground">
-                  {finalCode ? `${finalCode} (${reportDate})` : `Import du ${reportDate}`}
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">
-                    Commentaire (jour ferie, vacances, operation, etc.)
-                  </div>
-                  <textarea
-                    className="min-h-[90px] w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    value={commentDraft}
-                    onChange={(e) => setCommentDraft(e.target.value)}
-                    placeholder="Ex: Jour ferie, forte affluence, travaux, etc."
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-2 border-t p-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setConfirmOpen(false)}
-                  disabled={uploading}
-                >
-                  Annuler
-                </Button>
-                <Button
-                  onClick={() => {
-                    const comment = commentDraft.trim();
-                    setConfirmOpen(false);
-                    handleUpload(comment ? comment : undefined);
-                  }}
-                  disabled={!canSubmit || uploading}
-                >
-                  {uploading ? "Import..." : "Confirmer l'import"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
+    <>
+      <QuickStatsCard
+        restaurants={restaurants}
+        doneCount={doneCount}
+        pendingCount={pendingCount}
+        yearlyMissing={yearlyMissing}
+        yearlyMissingLoading={yearlyMissingLoading}
+      />
 
-        <div className="text-sm text-muted-foreground">
-          Dépose tous les CSV BK du jour. Ils seront importés et contrôlés avant consolidation.
-        </div>
+      <TodayImportsCard
+        rows={todayRows}
+        canReplace={canReplace}
+        statusLoading={statusLoading}
+        statusError={statusError}
+        onImport={(code) => openImportModal(code, false, today)}
+        onReimport={(code, reportId) => openImportModal(code, true, today, reportId)}
+      />
 
-        <div className="rounded-lg border bg-background p-4 space-y-3">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="text-sm font-medium">Choix du restaurant</div>
-            <div className="flex items-center gap-2">
-              <div className="text-xs text-muted-foreground">Date du depot</div>
-              <Input
-                type="date"
-                value={reportDate}
-                max={today}
-                className="w-[160px]"
-                onChange={(e) => setReportDate(e.target.value)}
-              />
-            </div>
-          </div>
+      <OverdueImportsCard
+        rows={overdueRows}
+        loading={overdueLoading}
+        newestFirst={newestFirst}
+        onNewestFirstChange={setNewestFirst}
+        onImport={(code, dateValue) => openImportModal(code, false, dateValue)}
+      />
 
-          <div className="space-y-2">
-            <div className="text-xs text-muted-foreground">Statut des imports</div>
-            {statusError && (
-              <div className="text-sm text-destructive whitespace-pre-wrap">{statusError}</div>
-            )}
-            {restaurants.length === 0 ? (
-              <div className="text-sm text-muted-foreground">Aucun restaurant disponible.</div>
-            ) : (
-              <div className="rounded-md border overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Restaurant</TableHead>
-                      <TableHead>Etat</TableHead>
-                      <TableHead className="w-[160px] text-right">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {missingRestaurants.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell>
-                          <div className="text-sm font-medium">{r.code}</div>
-                          <div className="text-xs text-muted-foreground">{r.name}</div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2 text-amber-700">
-                            <AlertTriangle className="h-4 w-4" />
-                            <span className="text-xs">A importer</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button size="sm" onClick={() => selectRestaurant(r.code)}>
-                            Importer
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {doneRestaurants.map((r) => {
-                      const report = reportsByCode[r.code];
-                      return (
-                        <TableRow key={r.id}>
-                          <TableCell>
-                            <div className="text-sm font-medium">{r.code}</div>
-                            <div className="text-xs text-muted-foreground">{r.name}</div>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2 text-emerald-700">
-                              <CheckCircle2 className="h-4 w-4" />
-                              <span className="text-xs">
-                                Importe a {formatTime(report.created_at)}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              disabled={!canReplace}
-                              onClick={() => setReplaceTarget({ code: r.code, reportId: report.id })}
-                            >
-                              <span className="inline-flex items-center gap-1">
-                                <RotateCcw className="h-4 w-4" />
-                                Reimporter
-                              </span>
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-            <div className="text-xs text-muted-foreground">
-              Choisis un restaurant a importer. Les imports deja faits sont bloques.
-            </div>
-          </div>
-        </div>
+      {uploadMsg && <div className="text-sm whitespace-pre-wrap">{uploadMsg}</div>}
 
-        {finalCode ? (
-          <div className="rounded-lg border bg-background p-4 space-y-3">
-            <div className="text-sm font-medium">Importer les fichiers</div>
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">Restaurant selectionne</div>
-              <Input
-                readOnly
-                className="max-w-sm"
-                value={`${finalCode} - ${restaurants.find((r) => r.code === finalCode)?.name ?? ""}`}
-              />
-            </div>
-            {selectedReport && !(replaceMode && replaceMode.code === finalCode) && (
-              <div className="text-xs text-amber-700">
-                Import deja fait. Utilise Reimporter pour corriger les CSV.
-              </div>
-            )}
-            {replaceMode && replaceMode.code === finalCode && (
-              <div className="text-xs text-destructive">
-                Mode remplacement actif. Les donnees existantes seront supprimees avant import.
-              </div>
-            )}
-
-            <div className="text-xs text-muted-foreground">Fichiers CSV</div>
-
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">SyntheseCA_caparprofit.csv</div>
-              <div className={fileCaparprofit ? "rounded-md bg-green-50 p-2" : ""}>
-                <Input
-                  type="file"
-                  accept=".csv,text/csv"
-                  disabled={!finalCode || (selectedReport && !(replaceMode && replaceMode.code === finalCode))}
-                  onChange={(e) => setFileCaparprofit(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">SyntheseCA_consommationparprofit.csv</div>
-              <div className={fileConsommation ? "rounded-md bg-green-50 p-2" : ""}>
-                <Input
-                  type="file"
-                  accept=".csv,text/csv"
-                  disabled={!finalCode || (selectedReport && !(replaceMode && replaceMode.code === finalCode))}
-                  onChange={(e) => setFileConsommation(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">SyntheseCA_corrections.csv</div>
-              <div className={fileCorrections ? "rounded-md bg-green-50 p-2" : ""}>
-                <Input
-                  type="file"
-                  accept=".csv,text/csv"
-                  disabled={!finalCode || (selectedReport && !(replaceMode && replaceMode.code === finalCode))}
-                  onChange={(e) => setFileCorrections(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">SyntheseCA_divers.csv</div>
-              <div className={fileDivers ? "rounded-md bg-green-50 p-2" : ""}>
-                <Input
-                  type="file"
-                  accept=".csv,text/csv"
-                  disabled={!finalCode || (selectedReport && !(replaceMode && replaceMode.code === finalCode))}
-                  onChange={(e) => setFileDivers(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">SyntheseCA_reglement.csv</div>
-              <div className={fileReglement ? "rounded-md bg-green-50 p-2" : ""}>
-                <Input
-                  type="file"
-                  accept=".csv,text/csv"
-                  disabled={!finalCode || (selectedReport && !(replaceMode && replaceMode.code === finalCode))}
-                  onChange={(e) => setFileReglement(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">SyntheseCA_remises.csv</div>
-              <div className={fileRemises ? "rounded-md bg-green-50 p-2" : ""}>
-                <Input
-                  type="file"
-                  accept=".csv,text/csv"
-                  disabled={!finalCode || (selectedReport && !(replaceMode && replaceMode.code === finalCode))}
-                  onChange={(e) => setFileRemises(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">SyntheseCA_tva.csv</div>
-              <div className={fileTva ? "rounded-md bg-green-50 p-2" : ""}>
-                <Input
-                  type="file"
-                  accept=".csv,text/csv"
-                  disabled={!finalCode || (selectedReport && !(replaceMode && replaceMode.code === finalCode))}
-                  onChange={(e) => setFileTva(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <div className="text-xs text-muted-foreground">SyntheseCA_venteAnnexes.csv</div>
-              <div className={fileVenteAnnexes ? "rounded-md bg-green-50 p-2" : ""}>
-                <Input
-                  type="file"
-                  accept=".csv,text/csv"
-                  disabled={!finalCode || (selectedReport && !(replaceMode && replaceMode.code === finalCode))}
-                  onChange={(e) => setFileVenteAnnexes(e.target.files?.[0] ?? null)}
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button onClick={() => setConfirmOpen(true)} disabled={!canSubmit}>
-                {uploading ? "Import..." : "Importer les CSV"}
-              </Button>
-            </div>
-            {uploadMsg && <div className="text-sm whitespace-pre-wrap">{uploadMsg}</div>}
-          </div>
-        ) : (
-          <div className="text-sm text-muted-foreground">
-            Selectionne un restaurant a importer pour afficher le formulaire.
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      <ImportModal
+        open={modalOpen}
+        selectedRestaurant={selectedRestaurant}
+        modalDate={modalDate}
+        replaceMode={replaceMode}
+        uploading={uploading}
+        fileCount={fileCount}
+        totalSteps={totalSteps}
+        progressPercent={progressPercent}
+        files={files}
+        fileErrors={fileErrors}
+        fileSpecs={FILE_SPECS}
+        commentDraft={commentDraft}
+        onClose={closeModal}
+        onSubmit={submitImport}
+        onCommentChange={setCommentDraft}
+        onFileSelect={handleFileSelected}
+      />
+    </>
   );
 }

@@ -563,7 +563,7 @@ export function BkMonthlyRecap({ restaurants }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recap mensuel BK</CardTitle>
+        <CardTitle>Récap mensuel BK</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="text-sm text-muted-foreground">
@@ -618,8 +618,8 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                 <TableHead className="text-right">% Prev vs N-1</TableHead>
                 <TableHead className={`text-right ${colCaClass}`}>CA real</TableHead>
                 <TableHead className={`text-right ${colCaClass}`}>% N-1</TableHead>
-                <TableHead className="text-right">Ecart Prev</TableHead>
-                <TableHead className="text-right">Ecart Prev %</TableHead>
+                <TableHead className="text-right">Écart Prev</TableHead>
+                <TableHead className="text-right">Écart Prev %</TableHead>
                 <TableHead className={`text-right ${colClientsClass}`}>Clients</TableHead>
                 <TableHead className="text-right">Clients N-1</TableHead>
                 <TableHead className={`text-right ${colClientsClass}`}>% N-1</TableHead>
@@ -646,8 +646,8 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                 <TableHead className={`text-right ${colCncClass}`}>MP N-1</TableHead>
                 <TableHead className={`text-right ${colCncClass}`}>% N-1</TableHead>
                 <TableHead className={`text-right ${colCncClass}`}>% CA CNC</TableHead>
-                <TableHead className="text-right">Ecart caisse</TableHead>
-                <TableHead className="text-right">Ecart caisse % CA</TableHead>
+                <TableHead className="text-right">Écart caisse</TableHead>
+                <TableHead className="text-right">Écart caisse % CA</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

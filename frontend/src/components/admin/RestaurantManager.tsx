@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,7 @@ export function RestaurantManager() {
     }
     try {
       await createRestaurant({ code: c, name: n });
-      setMsg("✅ Restaurant cree.");
+      setMsg("✅ Restaurant créé.");
       setCode("");
       setName("");
       await loadRestaurants();
@@ -70,7 +70,7 @@ export function RestaurantManager() {
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Toulouse Saint Orens" />
           </div>
           <div className="flex items-end gap-2">
-            <Button onClick={create}>Creer</Button>
+            <Button onClick={create}>Créer</Button>
           </div>
         </div>
 
@@ -109,3 +109,4 @@ export function RestaurantManager() {
     </Card>
   );
 }
+
