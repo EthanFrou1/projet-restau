@@ -1,10 +1,9 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { TopBar } from "@/components/TopBar";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, BarChart3, Database, LayoutDashboard, LogOut, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { logout, listUsers, createUser, deleteUser } from "@/lib/auth";
 import { BkReportUploader } from "@/components/bk/BkReportUploader";
 import { BkReportView } from "@/components/bk/BkReportView";
@@ -69,6 +68,9 @@ type ReportListItem = {
   created_at: string;
 };
 
+type TabValue = "overview" | "data" | "bk-global" | "bk-monthly" | "bk-compare" | "dev";
+type DashScope = "year" | "month" | "day";
+
 const moneyFmt = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
 const compactMoneyFmt = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -95,7 +97,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
   const [err, setErr] = useState<string | null>(null);
   const [report, setReport] = useState<BKReport | null>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState<TabValue>("overview");
   const [devUsers, setDevUsers] = useState<Array<{
     id: number;
     email: string;
@@ -129,10 +131,14 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
   const [assocMsg, setAssocMsg] = useState<string | null>(null);
   const [dashYear, setDashYear] = useState(String(new Date().getFullYear()));
   const [dashMonth, setDashMonth] = useState(String(new Date().getMonth() + 1).padStart(2, "0"));
+  const [dashScope, setDashScope] = useState<DashScope>("month");
+  const [dashDayFrom, setDashDayFrom] = useState(String(new Date().getDate()).padStart(2, "0"));
+  const [dashDayTo, setDashDayTo] = useState(String(new Date().getDate()).padStart(2, "0"));
   const [dashRestaurant, setDashRestaurant] = useState("");
   const [dashItems, setDashItems] = useState<MonthlyItem[]>([]);
   const [dashLoading, setDashLoading] = useState(false);
   const [dashErr, setDashErr] = useState<string | null>(null);
+  const [hoveredTrendIndex, setHoveredTrendIndex] = useState<number | null>(null);
   const [dailyStatus, setDailyStatus] = useState<{
     loading: boolean;
     missing: Restaurant[];
@@ -179,15 +185,35 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
     me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV" || me?.role === "READONLY";
   const canDeleteBk = me?.role === "ADMIN" || me?.role === "DEV";
   const canReplaceImport = me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV";
-  const isWideTab =
-    activeTab === "bk-global" || activeTab === "bk-monthly" || activeTab === "bk-compare";
-  const containerClass = isWideTab
-    ? "mx-auto p-6 space-y-6 max-w-none"
-    : "mx-auto p-6 space-y-6 max-w-6xl";
+  const containerClass = "mx-auto w-full space-y-6";
   const pageSize = 10;
   const totalUserPages = Math.max(1, Math.ceil(devUsers.length / pageSize));
   const usersPageStart = (devUsersPage - 1) * pageSize;
   const usersPageItems = devUsers.slice(usersPageStart, usersPageStart + pageSize);
+  const navItems = useMemo(
+    () =>
+      [
+        { value: "overview", label: "Dashboard", icon: LayoutDashboard },
+        { value: "data", label: "Mes imports", icon: Database },
+        canViewGlobalBk ? { value: "bk-global", label: "BK global", icon: BarChart3 } : null,
+        canViewGlobalBk ? { value: "bk-monthly", label: "BK mensuel", icon: BarChart3 } : null,
+        canViewGlobalBk ? { value: "bk-compare", label: "Comparaison", icon: BarChart3 } : null,
+        isDev ? { value: "dev", label: "Dev", icon: Shield } : null,
+      ].filter(
+        (
+          item
+        ): item is {
+          value: TabValue;
+          label: string;
+          icon: typeof LayoutDashboard;
+        } => Boolean(item)
+      ),
+    [canViewGlobalBk, isDev]
+  );
+  const activeTabLabel = useMemo(
+    () => navItems.find((item) => item.value === activeTab)?.label ?? "Dashboard",
+    [activeTab, navItems]
+  );
 
   async function loadDevUsers() {
     setDevUsersLoading(true);
@@ -220,6 +246,16 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
     }
   }, [isDev]);
 
+  useEffect(() => {
+    const devTabHidden = activeTab === "dev" && !isDev;
+    const globalTabHidden =
+      (activeTab === "bk-global" || activeTab === "bk-monthly" || activeTab === "bk-compare") &&
+      !canViewGlobalBk;
+    if (devTabHidden || globalTabHidden) {
+      setActiveTab("overview");
+    }
+  }, [activeTab, canViewGlobalBk, isDev]);
+
   function updateAssocUser(userId: number, nextCodes: string[]) {
     setAssocUsers((prev) =>
       prev.map((u) =>
@@ -243,28 +279,37 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
   useEffect(() => {
     const yearNum = Number(dashYear);
     const monthNum = Number(dashMonth);
-    if (!yearNum || !monthNum) return;
+    if (!yearNum) return;
+    if ((dashScope === "month" || dashScope === "day") && !monthNum) return;
     const restaurantCode = dashRestaurant.trim().toUpperCase();
+
+    async function fetchMonthly(year: number, month: number) {
+      const params = new URLSearchParams();
+      params.set("year", String(year));
+      params.set("month", String(month));
+      if (restaurantCode) params.set("restaurant_code", restaurantCode);
+      return apiFetch<MonthlyItem[]>(`/reports/bk/monthly?${params.toString()}`);
+    }
 
     (async () => {
       setDashLoading(true);
       setDashErr(null);
       try {
-        const params = new URLSearchParams();
-        params.set("year", String(yearNum));
-        params.set("month", String(monthNum));
-        if (restaurantCode) params.set("restaurant_code", restaurantCode);
-        const data = await apiFetch<MonthlyItem[]>(
-          `/reports/bk/monthly?${params.toString()}`
-        );
-        setDashItems(data);
+        if (dashScope === "year") {
+          const months = Array.from({ length: 12 }, (_, i) => i + 1);
+          const chunks = await Promise.all(months.map((m) => fetchMonthly(yearNum, m)));
+          setDashItems(chunks.flat());
+        } else {
+          const data = await fetchMonthly(yearNum, monthNum);
+          setDashItems(data);
+        }
       } catch (e: any) {
         setDashErr(e?.message ?? "Erreur chargement dashboard");
       } finally {
         setDashLoading(false);
       }
     })();
-  }, [dashYear, dashMonth, dashRestaurant]);
+  }, [dashScope, dashYear, dashMonth, dashRestaurant]);
 
   async function refreshDailyStatus() {
     if (!canSeeDailyBanner) return;
@@ -314,6 +359,84 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
       new Date(Number(dashYear), monthIdx, 1)
     );
   }, [dashMonth, dashYear]);
+  const periodLabel = useMemo(() => {
+    if (dashScope === "year") return `année ${dashYear}`;
+    if (dashScope === "day") {
+      const from = Number(dashDayFrom);
+      const to = Number(dashDayTo);
+      const start = String(Math.min(from || 1, to || 1)).padStart(2, "0");
+      const end = String(Math.max(from || 1, to || 1)).padStart(2, "0");
+      return `${start}/${dashMonth}/${dashYear} - ${end}/${dashMonth}/${dashYear}`;
+    }
+    return `${monthLabel} ${dashYear}`;
+  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, monthLabel]);
+  const filtersSummary = useMemo(() => {
+    const selectedRestaurant = restaurants.find((r) => r.code === dashRestaurant);
+    const restaurantLabel = selectedRestaurant
+      ? `${selectedRestaurant.code} - ${selectedRestaurant.name}`
+      : "tous les magasins";
+
+    if (dashScope === "year") {
+      return `Voici les données de ${restaurantLabel} sur l'année ${dashYear}.`;
+    }
+
+    if (dashScope === "month") {
+      return `Voici les données de ${restaurantLabel} sur ${monthLabel} ${dashYear}.`;
+    }
+
+    const from = Number(dashDayFrom);
+    const to = Number(dashDayTo);
+    const start = String(Math.min(from || 1, to || 1)).padStart(2, "0");
+    const end = String(Math.max(from || 1, to || 1)).padStart(2, "0");
+    if (start === end) {
+      return `Voici les données de ${restaurantLabel} pour le ${start}/${dashMonth}/${dashYear}.`;
+    }
+    return `Voici les données de ${restaurantLabel} du ${start}/${dashMonth}/${dashYear} au ${end}/${dashMonth}/${dashYear}.`;
+  }, [dashDayFrom, dashDayTo, dashMonth, dashRestaurant, dashScope, dashYear, monthLabel, restaurants]);
+
+  const dayOptions = useMemo(() => {
+    const yearNum = Number(dashYear);
+    const monthNum = Number(dashMonth);
+    if (!yearNum || !monthNum) return [];
+    const lastDay = new Date(yearNum, monthNum, 0).getDate();
+    return Array.from({ length: lastDay }, (_, i) => String(i + 1).padStart(2, "0"));
+  }, [dashMonth, dashYear]);
+  const dayToOptions = useMemo(() => {
+    const from = Number(dashDayFrom);
+    if (!from) return dayOptions;
+    return dayOptions.filter((day) => Number(day) >= from);
+  }, [dashDayFrom, dayOptions]);
+
+  useEffect(() => {
+    if (dayOptions.length === 0) return;
+    if (!dayOptions.includes(dashDayFrom)) setDashDayFrom(dayOptions[0]);
+    if (!dayOptions.includes(dashDayTo)) setDashDayTo(dayOptions[0]);
+  }, [dashDayFrom, dashDayTo, dayOptions]);
+
+  useEffect(() => {
+    const from = Number(dashDayFrom);
+    const to = Number(dashDayTo);
+    if (!from || !to) return;
+    if (to < from) {
+      setDashDayTo(dashDayFrom);
+    }
+  }, [dashDayFrom, dashDayTo]);
+
+  const scopedDashItems = useMemo(() => {
+    if (dashScope === "year") return dashItems;
+    if (dashScope === "month") {
+      const monthPrefix = `${dashYear}-${dashMonth}`;
+      return dashItems.filter((item) => item.report_date.startsWith(monthPrefix));
+    }
+    const from = Number(dashDayFrom);
+    const to = Number(dashDayTo);
+    if (!from || !to) return [];
+    const start = Math.min(from, to);
+    const end = Math.max(from, to);
+    const fromIso = `${dashYear}-${dashMonth}-${String(start).padStart(2, "0")}`;
+    const toIso = `${dashYear}-${dashMonth}-${String(end).padStart(2, "0")}`;
+    return dashItems.filter((item) => item.report_date >= fromIso && item.report_date <= toIso);
+  }, [dashDayFrom, dashDayTo, dashItems, dashMonth, dashScope, dashYear]);
 
   const dashTotals = useMemo(() => {
     let ca = 0;
@@ -322,7 +445,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
     let clientsN1 = 0;
     let caDelivery = 0;
     let caCnc = 0;
-    for (const item of dashItems) {
+    for (const item of scopedDashItems) {
       const kpi = item.kpi;
       const caReal = kpi?.ca_real ?? item.ca_net_total ?? 0;
       ca += caReal;
@@ -336,16 +459,58 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
     const mpN1 = clientsN1 ? caN1 / clientsN1 : 0;
     const caMagasin = Math.max(0, ca - caDelivery - caCnc);
     return { ca, caN1, clients, clientsN1, mp, mpN1, caDelivery, caCnc, caMagasin };
-  }, [dashItems]);
+  }, [scopedDashItems]);
 
   const dashTrend = useMemo(() => {
+    if (dashScope === "year") {
+      const labels = Array.from({ length: 12 }, (_, i) =>
+        new Intl.DateTimeFormat("fr-FR", { month: "short" }).format(new Date(Number(dashYear), i, 1))
+      );
+      const n = Array.from({ length: 12 }, () => 0);
+      const n1 = Array.from({ length: 12 }, () => 0);
+      for (const item of scopedDashItems) {
+        const monthIdx = Number(item.report_date.slice(5, 7)) - 1;
+        if (monthIdx < 0 || monthIdx > 11) continue;
+        n[monthIdx] += item.kpi?.ca_real ?? item.ca_net_total ?? 0;
+        n1[monthIdx] += item.kpi?.n1_ht ?? 0;
+      }
+      return { labels, n, n1 };
+    }
+
+    if (dashScope === "day") {
+      const from = Number(dashDayFrom);
+      const to = Number(dashDayTo);
+      if (!from || !to) return { labels: [], n: [], n1: [] };
+      const start = Math.min(from, to);
+      const end = Math.max(from, to);
+      const labels: string[] = [];
+      const n: number[] = [];
+      const n1: number[] = [];
+      const byDate = new Map<string, { n: number; n1: number }>();
+      for (const item of scopedDashItems) {
+        const prev = byDate.get(item.report_date) || { n: 0, n1: 0 };
+        prev.n += item.kpi?.ca_real ?? item.ca_net_total ?? 0;
+        prev.n1 += item.kpi?.n1_ht ?? 0;
+        byDate.set(item.report_date, prev);
+      }
+      for (let d = start; d <= end; d += 1) {
+        const day = String(d).padStart(2, "0");
+        const iso = `${dashYear}-${dashMonth}-${day}`;
+        const values = byDate.get(iso) || { n: 0, n1: 0 };
+        labels.push(day);
+        n.push(values.n);
+        n1.push(values.n1);
+      }
+      return { labels, n, n1 };
+    }
+
     const yearNum = Number(dashYear);
     const monthNum = Number(dashMonth);
-    if (!yearNum || !monthNum) return { days: [], n: [], n1: [] };
+    if (!yearNum || !monthNum) return { labels: [], n: [], n1: [] };
     const lastDay = new Date(yearNum, monthNum, 0).getDate();
     const byDate = new Map<string, MonthlyItem>();
-    dashItems.forEach((item) => byDate.set(item.report_date, item));
-    const days: number[] = [];
+    scopedDashItems.forEach((item) => byDate.set(item.report_date, item));
+    const labels: string[] = [];
     const n: number[] = [];
     const n1: number[] = [];
     for (let d = 1; d <= lastDay; d += 1) {
@@ -353,19 +518,94 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
       const item = byDate.get(iso);
       const caReal = item?.kpi?.ca_real ?? item?.ca_net_total ?? 0;
       const caN1 = item?.kpi?.n1_ht ?? 0;
-      days.push(d);
+      labels.push(String(d));
       n.push(caReal);
       n1.push(caN1);
     }
-    return { days, n, n1 };
-  }, [dashItems, dashMonth, dashYear]);
+    return { labels, n, n1 };
+  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, scopedDashItems]);
+
+  const trendChart = useMemo(() => {
+    const padLeft = 56;
+    const padRight = 20;
+    const padTop = 20;
+    const padBottom = 34;
+    const chartWidth = 640;
+    const chartHeight = 240;
+    const w = chartWidth - padLeft - padRight;
+    const h = chartHeight - padTop - padBottom;
+    const maxValue = Math.max(...dashTrend.n, ...dashTrend.n1, 1);
+    const len = dashTrend.labels.length;
+    const toPoints = (arr: number[]) =>
+      arr.map((v, i) => {
+        const x = padLeft + (w * i) / Math.max(1, len - 1);
+        const y = padTop + h - (v / maxValue) * h;
+        return { x, y, value: v };
+      });
+    const yTicks = [1, 0.5, 0].map((ratio) => ({
+      ratio,
+      y: padTop + h - h * ratio,
+      value: compactMoneyFmt.format(maxValue * ratio),
+    }));
+    const maxTicks = 6;
+    const stride = Math.max(1, Math.ceil(len / maxTicks));
+    const xTickIdx = Array.from({ length: len }, (_, idx) => idx).filter(
+      (idx) => idx === 0 || idx === len - 1 || idx % stride === 0
+    );
+    const xTicks = xTickIdx.map((idx) => ({
+      idx,
+      x: padLeft + (w * idx) / Math.max(1, len - 1),
+      label: dashTrend.labels[idx] ?? "",
+    }));
+    const nPoints = toPoints(dashTrend.n);
+    const n1Points = toPoints(dashTrend.n1);
+    return {
+      chartWidth,
+      chartHeight,
+      padLeft,
+      padRight,
+      padTop,
+      padBottom,
+      w,
+      h,
+      yTicks,
+      xTicks,
+      nPoints,
+      n1Points,
+      nLine: nPoints.map((p) => `${p.x},${p.y}`).join(" "),
+      n1Line: n1Points.map((p) => `${p.x},${p.y}`).join(" "),
+    };
+  }, [dashTrend]);
+
+  const hoveredTrend = useMemo(() => {
+    if (hoveredTrendIndex === null) return null;
+    const label = dashTrend.labels[hoveredTrendIndex];
+    const n = dashTrend.n[hoveredTrendIndex];
+    const n1 = dashTrend.n1[hoveredTrendIndex];
+    const nPoint = trendChart.nPoints[hoveredTrendIndex];
+    const n1Point = trendChart.n1Points[hoveredTrendIndex];
+    if (
+      label === undefined ||
+      n === undefined ||
+      n1 === undefined ||
+      !nPoint ||
+      !n1Point
+    ) {
+      return null;
+    }
+    return { label, n, n1, nPoint, n1Point };
+  }, [dashTrend, hoveredTrendIndex, trendChart]);
+
+  useEffect(() => {
+    setHoveredTrendIndex(null);
+  }, [dashScope, dashYear, dashMonth, dashDayFrom, dashDayTo, dashRestaurant]);
 
   const storeQuickView = useMemo(() => {
     const map = new Map<string, { code: string; name: string; ca: number; caN1: number; clients: number }>();
     restaurants.forEach((r) =>
       map.set(r.code, { code: r.code, name: r.name, ca: 0, caN1: 0, clients: 0 })
     );
-    dashItems.forEach((item) => {
+    scopedDashItems.forEach((item) => {
       const entry = map.get(item.restaurant_code) || {
         code: item.restaurant_code,
         name: item.restaurant_code,
@@ -380,7 +620,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
       map.set(item.restaurant_code, entry);
     });
     return Array.from(map.values());
-  }, [dashItems, restaurants]);
+  }, [restaurants, scopedDashItems]);
 
   const yearOptions = useMemo(() => {
     const y = new Date().getFullYear();
@@ -396,15 +636,15 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
     setCreateMsg(null);
     const email = newEmail.trim().toLowerCase();
     if (!email) {
-      setCreateMsg("❌ Email requis.");
+      setCreateMsg("Email requis.");
       return;
     }
     if (newPassword.length < 8) {
-      setCreateMsg("❌ Mot de passe trop court (min 8).");
+      setCreateMsg("Mot de passe trop court (min 8).");
       return;
     }
     if (newPassword !== newPassword2) {
-      setCreateMsg("❌ Les mots de passe ne correspondent pas.");
+      setCreateMsg("Les mots de passe ne correspondent pas.");
       return;
     }
     try {
@@ -415,7 +655,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
         first_name: newFirstName.trim() || null,
         last_name: newLastName.trim() || null,
       });
-      setCreateMsg(`✅ Utilisateur créé: ${res.email} (${res.role})`);
+      setCreateMsg(`Utilisateur cree: ${res.email} (${res.role})`);
       setNewFirstName("");
       setNewLastName("");
       setNewEmail("");
@@ -424,25 +664,21 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
       setNewRole("READONLY");
       await loadDevUsers();
     } catch (e: any) {
-      setCreateMsg(`❌ ${e?.message ?? "Erreur création utilisateur"}`);
+      setCreateMsg(`Erreur: ${e?.message ?? "Erreur creation utilisateur"}`);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await logout();
+    } finally {
+      onLoggedOut();
     }
   }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <TopBar
-        email={me?.email ?? ""}
-        role={me?.role ?? "—"}
-        onLogout={async () => {
-          try {
-            await logout();
-          } finally {
-            onLoggedOut();
-          }
-        }}
-      />
-
-      <div className={containerClass}>
+      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabValue)} className="md:flex md:min-h-screen md:items-start">
         <ConfirmDialog
           open={Boolean(confirmDeleteUser)}
           title="Supprimer cet utilisateur ?"
@@ -461,51 +697,88 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
             await loadDevUsers();
           }}
         />
-        <div className="flex items-center justify-between">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
-            <p className="text-sm text-muted-foreground">
-              {displayName ? `Bonjour ${displayName} ! ` : ""}Ici tu retrouves ton accès et tes données quotidiennes.
-            </p>
-          </div>
-        <div className="flex items-center gap-3">
-          {me ? (
-            <div className="text-right">
-              {displayName && <div className="text-lg font-bold">{displayName}</div>}
-              <div className="text-sm">{me.email}</div>
-              <div className="text-xs text-muted-foreground flex items-center gap-2 justify-end">
-                {roleBadge}
-                  <span>id={me.id}</span>
-                  <span>{me.is_active ? "active" : "inactive"}</span>
+        <aside className="border-b border-slate-500/40 bg-gradient-to-b from-slate-800 via-slate-700 to-zinc-800 text-slate-100 md:sticky md:top-0 md:h-screen md:w-72 md:flex-shrink-0 md:self-start md:border-b-0 md:border-r">
+          <div className="flex h-full flex-col p-4 md:p-6">
+            <div className="space-y-2">
+              <div className="text-xl font-semibold tracking-tight">Projet Restau</div>
+              <div className="text-sm text-slate-300">Gestion et suivi des rapports</div>
+            </div>
+
+            <nav className="mt-6 grid gap-2">
+              {navItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.value;
+                return (
+                  <Button
+                    key={item.value}
+                    variant="ghost"
+                    className={
+                      isActive
+                        ? "h-11 justify-start gap-2 bg-white/25 text-white hover:bg-white/30"
+                        : "h-11 justify-start gap-2 text-slate-100 hover:bg-white/15 hover:text-white"
+                    }
+                    onClick={() => setActiveTab(item.value)}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{item.label}</span>
+                  </Button>
+                );
+              })}
+            </nav>
+
+            <div className="mt-auto space-y-3 pt-6">
+              {me ? (
+                <div className="rounded-xl border border-white/25 bg-white/15 p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/25 text-lg font-semibold">
+                      {displayName.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      {displayName && <div className="text-base font-semibold leading-tight">{displayName}</div>}
+                      <div className="text-sm font-medium text-slate-300">{me.role}</div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <Badge variant="outline">{loading ? "Loading…" : "Not logged"}</Badge>
-            )}
+              ) : (
+                <Badge variant="outline" className="w-fit border-white/20 text-white">
+                  {loading ? "Loading..." : "Not logged"}
+                </Badge>
+              )}
+            </div>
           </div>
-        </div>
+        </aside>
 
-        {err && (
-          <Card className="border-destructive/40">
-            <CardHeader>
-              <CardTitle className="text-destructive">Erreur</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm whitespace-pre-wrap">{err}</CardContent>
-          </Card>
-        )}
+        <main className="min-w-0 flex-1 px-4 py-4 md:px-6 md:py-6 lg:px-8">
+          <div className={`${containerClass} min-w-0`}>
+            <header className="space-y-4 px-1 py-1">
+              <div className="flex items-center justify-end gap-2">
+                {roleBadge}
+                <Button variant="outline" className="gap-2" onClick={handleLogout}>
+                  <LogOut className="h-4 w-4" />
+                  Déconnexion
+                </Button>
+              </div>
+              <div className="space-y-1">
+                <h1 className="text-3xl font-semibold tracking-tight">{activeTabLabel}</h1>
+                {activeTab === "overview" && (
+                  <p className="text-sm text-muted-foreground">
+                    {displayName ? `Bonjour ${displayName} ! ` : ""}Ici tu retrouves ton accès et tes données quotidiennes.
+                  </p>
+                )}
+              </div>
+            </header>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="overview">Dashboard</TabsTrigger>
-            <TabsTrigger value="data">Mes données</TabsTrigger>
-            {canViewGlobalBk && <TabsTrigger value="bk-global">BK global</TabsTrigger>}
-            {canViewGlobalBk && <TabsTrigger value="bk-monthly">BK mensuel</TabsTrigger>}
-            {canViewGlobalBk && <TabsTrigger value="bk-compare">Comparaison</TabsTrigger>}
-            {isDev && <TabsTrigger value="dev">Dev</TabsTrigger>}
-          </TabsList>
+            {err && (
+              <Card className="border-destructive/40">
+                <CardHeader>
+                  <CardTitle className="text-destructive">Erreur</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm whitespace-pre-wrap">{err}</CardContent>
+              </Card>
+            )}
 
-          <TabsContent value="overview" className="space-y-4">
-            {canSeeDailyBanner && (
+            <TabsContent value="overview" className="space-y-4">
+              {canSeeDailyBanner && (
               <Card className="border-amber-200 bg-amber-50/60">
                 <CardContent className="pt-4 space-y-2">
                   {dailyStatus.loading ? (
@@ -522,13 +795,13 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                     </div>
                   ) : dailyStatus.missing.length === 0 ? (
                     <div className="text-sm">
-                      ✅ Import du jour OK pour tous les restaurants
+                      Import du jour OK pour tous les restaurants
                       {dailyStatus.date ? ` (${dailyStatus.date})` : ""}.
                     </div>
                   ) : (
                     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                       <div className="text-sm">
-                        ⚠️ Import du jour manquant
+                        Import du jour manquant
                         {dailyStatus.date ? ` (${dailyStatus.date})` : ""} pour :{" "}
                         <span className="font-medium">
                           {dailyStatus.missing.map((r) => r.code).join(", ")}
@@ -547,13 +820,25 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
             )}
             <Card>
               <CardHeader>
-                <CardTitle>Tableau de bord BK</CardTitle>
+                <CardTitle className="text-xl md:text-2xl">Filtres</CardTitle>
               </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-3">
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Année</div>
+              <CardContent className="flex flex-wrap items-end gap-2">
+                <div className="w-full space-y-1 sm:w-[130px]">
+                  <div className="text-sm md:text-base text-muted-foreground">Période</div>
                   <select
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    className="h-10 w-full rounded-md border bg-background px-2 py-1 text-sm md:text-base"
+                    value={dashScope}
+                    onChange={(e) => setDashScope(e.target.value as DashScope)}
+                  >
+                    <option value="year">Année</option>
+                    <option value="month">Mois</option>
+                    <option value="day">Jour</option>
+                  </select>
+                </div>
+                <div className="w-full space-y-1 sm:w-[110px]">
+                  <div className="text-sm md:text-base text-muted-foreground">Année</div>
+                  <select
+                    className="h-10 w-full rounded-md border bg-background px-2 py-1 text-sm md:text-base"
                     value={dashYear}
                     onChange={(e) => setDashYear(e.target.value)}
                   >
@@ -564,30 +849,64 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                     ))}
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Mois</div>
-                  <select
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                    value={dashMonth}
-                    onChange={(e) => setDashMonth(e.target.value)}
-                  >
-                    {Array.from({ length: 12 }, (_, i) => {
-                      const label = new Intl.DateTimeFormat("fr-FR", { month: "long" }).format(
-                        new Date(2000, i, 1)
-                      );
-                      const value = String(i + 1).padStart(2, "0");
-                      return (
-                        <option key={value} value={value}>
-                          {label}
+                {dashScope !== "year" && (
+                  <div className="w-full space-y-1 sm:w-[160px]">
+                    <div className="text-sm md:text-base text-muted-foreground">Mois</div>
+                    <select
+                      className="h-10 w-full rounded-md border bg-background px-2 py-1 text-sm md:text-base"
+                      value={dashMonth}
+                      onChange={(e) => setDashMonth(e.target.value)}
+                    >
+                      {Array.from({ length: 12 }, (_, i) => {
+                        const label = new Intl.DateTimeFormat("fr-FR", { month: "long" }).format(
+                          new Date(2000, i, 1)
+                        );
+                        const value = String(i + 1).padStart(2, "0");
+                        return (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                )}
+                {dashScope === "day" && (
+                  <div className="w-full space-y-1 sm:w-[95px]">
+                    <div className="text-sm md:text-base text-muted-foreground">Du</div>
+                    <select
+                      className="h-10 w-full rounded-md border bg-background px-2 py-1 text-sm md:text-base"
+                      value={dashDayFrom}
+                      onChange={(e) => setDashDayFrom(e.target.value)}
+                    >
+                      {dayOptions.map((day) => (
+                        <option key={day} value={day}>
+                          {day}
                         </option>
-                      );
-                    })}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xs text-muted-foreground">Restaurant</div>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {dashScope === "day" && (
+                  <div className="w-full space-y-1 sm:w-[95px]">
+                    <div className="text-sm md:text-base text-muted-foreground">Au</div>
+                    <select
+                      className="h-10 w-full rounded-md border bg-background px-2 py-1 text-sm md:text-base"
+                      value={dashDayTo}
+                      onChange={(e) => setDashDayTo(e.target.value)}
+                    >
+                      {dayToOptions.map((day) => (
+                        <option key={day} value={day}>
+                          {day}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="w-full space-y-1 sm:w-[220px]">
+                  <div className="text-sm md:text-base text-muted-foreground">Restaurant</div>
                   <select
-                    className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                    className="h-10 w-full rounded-md border bg-background px-2 py-1 text-sm md:text-base"
                     value={dashRestaurant}
                     onChange={(e) => setDashRestaurant(e.target.value)}
                   >
@@ -600,13 +919,16 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                   </select>
                 </div>
                 {dashErr && (
-                  <div className="text-sm text-destructive md:col-span-3">{dashErr}</div>
+                  <div className="w-full text-sm text-destructive">{dashErr}</div>
                 )}
                 {dashLoading && (
-                  <div className="text-xs text-muted-foreground md:col-span-3">
+                  <div className="w-full text-sm md:text-base text-muted-foreground">
                     Chargement du tableau de bord...
                   </div>
                 )}
+                <div className="w-full text-sm md:text-base text-muted-foreground">
+                  {filtersSummary}
+                </div>
               </CardContent>
             </Card>
 
@@ -645,10 +967,10 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
               ].map((kpi) => (
                 <Card key={kpi.label}>
                   <CardContent className="pt-4 space-y-2">
-                    <div className="text-xs text-muted-foreground">{kpi.label}</div>
+                    <div className="text-sm md:text-base text-muted-foreground">{kpi.label}</div>
                     <div className="text-2xl font-semibold">{kpi.value}</div>
                     {kpi.change !== null && (
-                      <div className="flex items-center gap-1 text-xs">
+                      <div className="flex items-center gap-1 text-sm md:text-base">
                         {kpi.change >= 0 ? (
                           <ArrowUpRight className="h-3 w-3 text-emerald-600" />
                         ) : (
@@ -670,52 +992,153 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                   <CardTitle className="text-base">Évolution du CA (N vs N-1)</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-xs text-muted-foreground mb-3">
-                    {monthLabel} {dashYear}
+                  <div className="text-sm md:text-base text-muted-foreground mb-3">
+                    {periodLabel}
                   </div>
-                  <svg viewBox="0 0 640 240" className="w-full h-56">
-                    <rect x="0" y="0" width="640" height="240" fill="transparent" />
-                    {(() => {
-                      const maxValue = Math.max(
-                        ...dashTrend.n,
-                        ...dashTrend.n1,
-                        1
-                      );
-                      const padX = 32;
-                      const padY = 20;
-                      const w = 640 - padX * 2;
-                      const h = 240 - padY * 2;
-                      const toPoint = (arr: number[]) =>
-                        arr
-                          .map((v, i) => {
-                            const x = padX + (w * i) / Math.max(1, arr.length - 1);
-                            const y = padY + h - (v / maxValue) * h;
-                            return `${x},${y}`;
-                          })
-                          .join(" ");
-                      const nLine = toPoint(dashTrend.n);
-                      const n1Line = toPoint(dashTrend.n1);
-                      return (
+                  <div className="relative">
+                    {hoveredTrend && (
+                      <div className="absolute right-2 top-2 z-10 rounded-md border bg-background/95 px-3 py-2 text-sm md:text-base shadow-sm">
+                        <div className="font-medium">
+                          {dashScope === "year"
+                            ? `${hoveredTrend.label} ${dashYear}`
+                            : dashScope === "month"
+                              ? `Jour ${hoveredTrend.label} - ${monthLabel} ${dashYear}`
+                              : `${hoveredTrend.label}/${dashMonth}/${dashYear}`}
+                        </div>
+                        <div className="text-muted-foreground">N: {moneyFmt.format(hoveredTrend.n)}</div>
+                        <div className="text-muted-foreground">N-1: {moneyFmt.format(hoveredTrend.n1)}</div>
+                      </div>
+                    )}
+                    <svg
+                      viewBox={`0 0 ${trendChart.chartWidth} ${trendChart.chartHeight}`}
+                      className="w-full h-56"
+                      onMouseLeave={() => setHoveredTrendIndex(null)}
+                    >
+                      <rect x="0" y="0" width={trendChart.chartWidth} height={trendChart.chartHeight} fill="transparent" />
+                      <line
+                        x1={trendChart.padLeft}
+                        x2={trendChart.padLeft}
+                        y1={trendChart.padTop}
+                        y2={trendChart.padTop + trendChart.h}
+                        stroke="currentColor"
+                        className="text-border"
+                        strokeWidth="1"
+                      />
+                      <line
+                        x1={trendChart.padLeft}
+                        x2={trendChart.padLeft + trendChart.w}
+                        y1={trendChart.padTop + trendChart.h}
+                        y2={trendChart.padTop + trendChart.h}
+                        stroke="currentColor"
+                        className="text-border"
+                        strokeWidth="1"
+                      />
+                      {trendChart.yTicks.map((tick) => (
+                        <g key={`y-${tick.ratio}`}>
+                          <line
+                            x1={trendChart.padLeft}
+                            x2={trendChart.padLeft + trendChart.w}
+                            y1={tick.y}
+                            y2={tick.y}
+                            stroke="currentColor"
+                            className="text-muted/40"
+                            strokeWidth="1"
+                          />
+                          <text
+                            x={trendChart.padLeft - 8}
+                            y={tick.y + 4}
+                            textAnchor="end"
+                            className="fill-muted-foreground"
+                            fontSize="11"
+                          >
+                            {tick.value}
+                          </text>
+                        </g>
+                      ))}
+                      {trendChart.xTicks.map((tick) => (
+                        <text
+                          key={`x-${tick.idx}`}
+                          x={tick.x}
+                          y={trendChart.padTop + trendChart.h + 16}
+                          textAnchor="middle"
+                          className="fill-muted-foreground"
+                          fontSize="11"
+                        >
+                          {tick.label}
+                        </text>
+                      ))}
+                      <text
+                        x={6}
+                        y={trendChart.padTop + trendChart.h / 2}
+                        transform={`rotate(-90 6 ${trendChart.padTop + trendChart.h / 2})`}
+                        className="fill-muted-foreground"
+                        fontSize="11"
+                      >
+                        CA (EUR)
+                      </text>
+                      <text
+                        x={trendChart.padLeft + trendChart.w / 2}
+                        y={trendChart.chartHeight - 1}
+                        textAnchor="middle"
+                        className="fill-muted-foreground"
+                        fontSize="11"
+                      >
+                        {dashScope === "year" ? "Mois" : "Jours"}
+                      </text>
+                      {hoveredTrend && (
+                        <line
+                          x1={hoveredTrend.nPoint.x}
+                          x2={hoveredTrend.nPoint.x}
+                          y1={trendChart.padTop}
+                          y2={trendChart.padTop + trendChart.h}
+                          stroke="currentColor"
+                          className="text-muted-foreground/40"
+                          strokeDasharray="4 4"
+                          strokeWidth="1"
+                        />
+                      )}
+                      <polyline
+                        points={trendChart.n1Line}
+                        fill="none"
+                        stroke="currentColor"
+                        className="text-muted-foreground"
+                        strokeDasharray="4 4"
+                        strokeWidth="2"
+                      />
+                      <polyline
+                        points={trendChart.nLine}
+                        fill="none"
+                        stroke="currentColor"
+                        className="text-primary"
+                        strokeWidth="3"
+                      />
+                      {hoveredTrend && (
                         <>
-                          <polyline
-                            points={n1Line}
-                            fill="none"
-                            stroke="currentColor"
-                            className="text-muted-foreground"
-                            strokeDasharray="4 4"
-                            strokeWidth="2"
-                          />
-                          <polyline
-                            points={nLine}
-                            fill="none"
-                            stroke="currentColor"
-                            className="text-primary"
-                            strokeWidth="3"
-                          />
+                          <circle cx={hoveredTrend.nPoint.x} cy={hoveredTrend.nPoint.y} r="4" className="fill-primary" />
+                          <circle cx={hoveredTrend.n1Point.x} cy={hoveredTrend.n1Point.y} r="4" className="fill-muted-foreground" />
                         </>
-                      );
-                    })()}
-                  </svg>
+                      )}
+                      {dashTrend.labels.map((_, idx) => {
+                        const point = trendChart.nPoints[idx];
+                        if (!point) return null;
+                        const step =
+                          dashTrend.labels.length <= 1
+                            ? trendChart.w
+                            : trendChart.w / Math.max(1, dashTrend.labels.length - 1);
+                        return (
+                          <rect
+                            key={`hover-zone-${idx}`}
+                            x={Math.max(trendChart.padLeft, point.x - step / 2)}
+                            y={trendChart.padTop}
+                            width={Math.max(6, step)}
+                            height={trendChart.h}
+                            fill="transparent"
+                            onMouseEnter={() => setHoveredTrendIndex(idx)}
+                          />
+                        );
+                      })}
+                    </svg>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -739,7 +1162,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                       const width = Math.round((row.value / max) * 100);
                       return (
                         <div key={row.label} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-center justify-between text-sm md:text-base">
                             <span>{row.label}</span>
                             <span className="text-muted-foreground">
                               {compactMoneyFmt.format(row.value)}
@@ -762,7 +1185,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  Vue rapide magasins - {monthLabel} {dashYear}
+                    Vue rapide magasins - {periodLabel}
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -846,9 +1269,12 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                 <CardTitle className="text-base">Utilisateurs (DEV)</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                {devUsersLoading && (
+                  <div className="text-sm md:text-base text-muted-foreground">Chargement des utilisateurs...</div>
+                )}
                 <div className="grid gap-3 md:grid-cols-7">
                   <div>
-                    <div className="text-xs text-muted-foreground mb-1">Prénom</div>
+                    <div className="text-sm md:text-base text-muted-foreground mb-1">Prénom</div>
                     <input
                       className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                       value={newFirstName}
@@ -857,7 +1283,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                     />
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground mb-1">Nom</div>
+                    <div className="text-sm md:text-base text-muted-foreground mb-1">Nom</div>
                     <input
                       className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                       value={newLastName}
@@ -866,7 +1292,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                     />
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground mb-1">Email</div>
+                    <div className="text-sm md:text-base text-muted-foreground mb-1">Email</div>
                     <input
                       className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                       value={newEmail}
@@ -875,17 +1301,17 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                     />
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground mb-1">Mot de passe</div>
+                    <div className="text-sm md:text-base text-muted-foreground mb-1">Mot de passe</div>
                     <input
                       className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                       type="password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="8 caracteres minimum"
+                      placeholder="8 caractères minimum"
                     />
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground mb-1">Confirmer</div>
+                    <div className="text-sm md:text-base text-muted-foreground mb-1">Confirmer</div>
                     <input
                       className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                       type="password"
@@ -895,7 +1321,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                     />
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground mb-1">Role</div>
+                    <div className="text-sm md:text-base text-muted-foreground mb-1">Rôle</div>
                     <select
                       className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                       value={newRole}
@@ -912,7 +1338,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                   </div>
                 </div>
                 {createMsg && <div className="text-sm whitespace-pre-wrap">{createMsg}</div>}
-                <div className="text-xs text-muted-foreground">
+                <div className="text-sm md:text-base text-muted-foreground">
                   {devUsers.length === 0
                     ? "Aucun user charge."
                     : `${devUsers.length} utilisateur(s) charge(s).`}
@@ -926,7 +1352,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                         <TableHead className="w-[140px]">Prénom</TableHead>
                         <TableHead className="w-[140px]">Nom</TableHead>
                         <TableHead>Email</TableHead>
-                        <TableHead className="w-[120px]">Role</TableHead>
+                        <TableHead className="w-[120px]">Rôle</TableHead>
                         <TableHead className="w-[120px]">Active</TableHead>
                         <TableHead className="w-[140px] text-right">Actions</TableHead>
                       </TableRow>
@@ -942,8 +1368,8 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                         usersPageItems.map((u) => (
                           <TableRow key={u.id}>
                             <TableCell>{u.id}</TableCell>
-                            <TableCell>{u.first_name || "—"}</TableCell>
-                            <TableCell>{u.last_name || "—"}</TableCell>
+                            <TableCell>{u.first_name || "-"}</TableCell>
+                            <TableCell>{u.last_name || "-"}</TableCell>
                             <TableCell className="font-mono text-xs">{u.email}</TableCell>
                             <TableCell>{u.role}</TableCell>
                             <TableCell>{u.is_active ? "yes" : "no"}</TableCell>
@@ -979,7 +1405,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                     >
                       Prev
                     </Button>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-sm md:text-base text-muted-foreground">
                       Page {devUsersPage} / {totalUserPages}
                     </div>
                     <Button
@@ -997,12 +1423,12 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
 
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Associations utilisateurs → restaurants</CardTitle>
+                <CardTitle className="text-base">Associations utilisateurs ? restaurants</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-2">
                   {assocLoading && (
-                    <div className="text-xs text-muted-foreground">Chargement…</div>
+                    <div className="text-sm md:text-base text-muted-foreground">Chargement.</div>
                   )}
                   {assocMsg && <div className="text-sm text-destructive">{assocMsg}</div>}
                 </div>
@@ -1012,7 +1438,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                     <TableHeader>
                       <TableRow>
                         <TableHead>Utilisateur</TableHead>
-                        <TableHead>Rôle</TableHead>
+                        <TableHead>Rle</TableHead>
                         <TableHead>Restaurants</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -1035,7 +1461,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                             <TableCell>
                               <div className="flex flex-wrap gap-2">
                                 {u.restaurants.length === 0 ? (
-                                  <span className="text-xs text-muted-foreground">Aucun</span>
+                                  <span className="text-sm md:text-base text-muted-foreground">Aucun</span>
                                 ) : (
                                   u.restaurants.map((r) => (
                                     <Button
@@ -1061,7 +1487,7 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                                         }
                                       }}
                                     >
-                                      {r.code} ×
+                                      {r.code} 
                                     </Button>
                                   ))
                                 )}
@@ -1073,22 +1499,23 @@ export default function DashboardPage({ onLoggedOut }: { onLoggedOut: () => void
                     </TableBody>
                   </Table>
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="text-sm md:text-base text-muted-foreground">
                   Clique sur un restaurant pour le retirer. Pour ajouter, utilise le bloc ci-dessous.
                 </div>
               </CardContent>
             </Card>
 
             <RestaurantManager />
-            <UserRestaurantAssign
+          <UserRestaurantAssign
               users={devUsers}
               onSaved={(userId, codes) => updateAssocUser(userId, codes)}
             />
             </div>
           </TabsContent>
           )}
-        </Tabs>
-      </div>
+          </div>
+        </main>
+      </Tabs>
     </div>
   );
 }
