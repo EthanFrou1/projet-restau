@@ -1,4 +1,4 @@
-import { ApiError, parseApiError } from "@/lib/apiErrors";
+import { parseApiError } from "@/lib/apiErrors";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 

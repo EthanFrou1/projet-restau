@@ -12,7 +12,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { BKReport } from "@/components/bk/types";
-import { BkReportView } from "@/components/bk/BkReportView";
 import type { ReimportRequest } from "@/components/bk/uploader/types";
 
 type Restaurant = { id: number; code: string; name: string };
@@ -74,7 +73,7 @@ export function BkReportBrowser({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [selectedReport, setSelectedReport] = useState<BKReport | null>(null);
+  const [, setSelectedReport] = useState<BKReport | null>(null);
   const [selectedLoading, setSelectedLoading] = useState(false);
 
   const canSelectRestaurant = restaurants.length > 1;
