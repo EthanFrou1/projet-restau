@@ -25,8 +25,11 @@ class CreateUserRequest(BaseModel):
 def create_user(
     payload: CreateUserRequest,
     db: Session = Depends(get_db),
-    _user=Depends(require_roles([Role.DEV])),
+    _user=Depends(require_roles([Role.DEV, Role.ADMIN])),
 ): 
+    if _user.role == Role.ADMIN.value and payload.role not in (Role.MANAGER, Role.READONLY):
+        raise HTTPException(status_code=403, detail="Admin can only create MANAGER or READONLY users")
+
     email = normalize_email(payload.email)
 
     existing = db.query(User).filter(User.email == email).first()
@@ -90,14 +93,31 @@ class RestaurantCreateIn(BaseModel):
     name: str = Field(min_length=2)
 
 class UserRestaurantsIn(BaseModel):
-    restaurant_codes: list[str] = Field(min_length=1)
+    restaurant_codes: list[str] = Field(default_factory=list)
 
 @router.get("/users", response_model=List[UserOut])
 def list_users(
     db: Session = Depends(get_db),
-    _user=Depends(require_roles([Role.DEV])),
+    _user=Depends(require_roles([Role.DEV, Role.ADMIN])),
 ):
-    users = db.query(User).order_by(User.id.asc()).all()
+    users = (
+        db.query(User)
+        .options(joinedload(User.restaurants))
+        .order_by(User.id.asc())
+        .all()
+    )
+    if _user.role == Role.ADMIN.value:
+        admin_codes = {r.code for r in _user.restaurants}
+        allowed_roles = {Role.MANAGER.value, Role.READONLY.value}
+        users = [
+            u
+            for u in users
+            if u.role in allowed_roles
+            and (
+                len(u.restaurants) == 0
+                or any(r.code in admin_codes for r in u.restaurants)
+            )
+        ]
     return [
         UserOut(
             id=u.id,
@@ -113,14 +133,26 @@ def list_users(
 @router.get("/users-with-restaurants", response_model=List[UserWithRestaurantsOut])
 def list_users_with_restaurants(
     db: Session = Depends(get_db),
-    _user=Depends(require_roles([Role.DEV])),
+    _user=Depends(require_roles([Role.DEV, Role.ADMIN])),
 ):
+    admin_codes = {r.code for r in _user.restaurants} if _user.role == Role.ADMIN.value else set()
     users = (
         db.query(User)
         .options(joinedload(User.restaurants))
         .order_by(User.id.asc())
         .all()
     )
+    if _user.role == Role.ADMIN.value:
+        allowed_roles = {Role.MANAGER.value, Role.READONLY.value}
+        users = [
+            u
+            for u in users
+            if u.role in allowed_roles
+            and (
+                len(u.restaurants) == 0
+                or any(r.code in admin_codes for r in u.restaurants)
+            )
+        ]
     return [
         UserWithRestaurantsOut(
             id=u.id,
@@ -130,7 +162,8 @@ def list_users_with_restaurants(
             first_name=u.first_name,
             last_name=u.last_name,
             restaurants=[
-                RestaurantOut(id=r.id, code=r.code, name=r.name) for r in u.restaurants
+                RestaurantOut(id=r.id, code=r.code, name=r.name)
+                for r in ([x for x in u.restaurants if x.code in admin_codes] if _user.role == Role.ADMIN.value else u.restaurants)
             ],
         )
         for u in users
@@ -139,8 +172,10 @@ def list_users_with_restaurants(
 @router.get("/restaurants", response_model=List[RestaurantOut])
 def list_restaurants(
     db: Session = Depends(get_db),
-    _user=Depends(require_roles([Role.DEV])),
+    _user=Depends(require_roles([Role.DEV, Role.ADMIN])),
 ):
+    if _user.role == Role.ADMIN.value:
+        return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in sorted(_user.restaurants, key=lambda x: x.code)]
     rows = db.query(Restaurant).order_by(Restaurant.code.asc()).all()
     return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in rows]
 
@@ -166,21 +201,41 @@ def set_user_restaurants(
     user_id: int = Path(..., ge=1),
     payload: UserRestaurantsIn | None = None,
     db: Session = Depends(get_db),
-    _user=Depends(require_roles([Role.DEV])),
+    _user=Depends(require_roles([Role.DEV, Role.ADMIN])),
 ):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
     codes = [c.strip().upper() for c in (payload.restaurant_codes if payload else [])]
-    if not codes:
-        raise HTTPException(status_code=400, detail="restaurant_codes is required")
 
-    restaurants = db.query(Restaurant).filter(Restaurant.code.in_(codes)).all()
-    found = {r.code for r in restaurants}
-    missing = [c for c in codes if c not in found]
-    if missing:
-        raise HTTPException(status_code=400, detail=f"Unknown restaurant codes: {', '.join(missing)}")
+    restaurants: list[Restaurant] = []
+    if codes:
+        restaurants = db.query(Restaurant).filter(Restaurant.code.in_(codes)).all()
+        found = {r.code for r in restaurants}
+        missing = [c for c in codes if c not in found]
+        if missing:
+            raise HTTPException(status_code=400, detail=f"Unknown restaurant codes: {', '.join(missing)}")
+
+    if _user.role == Role.ADMIN.value:
+        admin_codes = {r.code for r in _user.restaurants}
+        if user.role not in (Role.MANAGER.value, Role.READONLY.value):
+            raise HTTPException(status_code=403, detail="Admin can only manage MANAGER or READONLY users")
+        current_codes = {r.code for r in user.restaurants}
+        if current_codes and current_codes.isdisjoint(admin_codes):
+            raise HTTPException(status_code=403, detail="User is outside your restaurant scope")
+        forbidden = [c for c in codes if c not in admin_codes]
+        if forbidden:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Restaurants outside your scope: {', '.join(forbidden)}",
+            )
+        outside_scope_restaurants = [r for r in user.restaurants if r.code not in admin_codes]
+        scoped_restaurants = [r for r in restaurants if r.code in admin_codes]
+        user.restaurants = outside_scope_restaurants + scoped_restaurants
+        db.commit()
+        db.refresh(user)
+        return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in scoped_restaurants]
 
     user.restaurants = restaurants
     db.commit()
@@ -192,7 +247,7 @@ def set_user_restaurants(
 def delete_user(
     user_id: int = Path(..., ge=1),
     db: Session = Depends(get_db),
-    _user=Depends(require_roles([Role.DEV])),
+    _user=Depends(require_roles([Role.DEV, Role.ADMIN])),
 ):
     # protection : ne jamais supprimer soi-même
     if user_id == _user.id:
@@ -205,6 +260,16 @@ def delete_user(
     # protection : ne jamais supprimer un DEV (optionnel mais recommandé)
     if target.role == Role.DEV.value:
         raise HTTPException(status_code=400, detail="Cannot delete a DEV user")
+
+    if _user.role == Role.ADMIN.value:
+        if target.role not in (Role.MANAGER.value, Role.READONLY.value):
+            raise HTTPException(status_code=403, detail="Admin can only delete MANAGER or READONLY users")
+        admin_codes = {r.code for r in _user.restaurants}
+        target_codes = {r.code for r in target.restaurants}
+        if not target_codes:
+            raise HTTPException(status_code=403, detail="User is not associated to your restaurants")
+        if not target_codes.issubset(admin_codes):
+            raise HTTPException(status_code=403, detail="User is outside your restaurant scope")
 
     db.delete(target)
     db.commit()

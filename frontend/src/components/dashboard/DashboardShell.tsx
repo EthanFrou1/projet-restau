@@ -71,7 +71,7 @@ const TAB_TO_PATH: Record<TabValue, string> = {
   "bk-global": "/historiques-imports",
   "bk-monthly": "/bk-mensuel",
   "bk-compare": "/comparaison",
-  dev: "/dev",
+  dev: "/administration",
 };
 
 function pathToTab(pathname: string): TabValue {
@@ -79,7 +79,7 @@ function pathToTab(pathname: string): TabValue {
   if (pathname === "/historiques-imports") return "bk-global";
   if (pathname === "/bk-mensuel") return "bk-monthly";
   if (pathname === "/comparaison") return "bk-compare";
-  if (pathname === "/dev") return "dev";
+  if (pathname === "/dev" || pathname === "/administration") return "dev";
   return "overview";
 }
 
@@ -129,6 +129,13 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   const [newRole, setNewRole] = useState<"ADMIN" | "MANAGER" | "READONLY" | "DEV">("READONLY");
   const [createMsg, setCreateMsg] = useState<string | null>(null);
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<{ id: number; label: string } | null>(null);
+  const [confirmRemoveAssoc, setConfirmRemoveAssoc] = useState<{
+    userId: number;
+    userLabel: string;
+    code: string;
+    nextCodes: string[];
+  } | null>(null);
+  const [assocBusy, setAssocBusy] = useState(false);
   const [assocUsers, setAssocUsers] = useState<
     Array<{
       id: number;
@@ -185,7 +192,14 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
 
   const roleBadge = useMemo(() => {
     if (!me) return null;
-    return <Badge variant="secondary">{me.role}</Badge>;
+    return (
+      <Badge
+        variant="outline"
+        className="border-slate-500/40 bg-gradient-to-b from-slate-800 via-slate-700 to-zinc-800 text-slate-100"
+      >
+        {me.role}
+      </Badge>
+    );
   }, [me]);
 
   const displayName = useMemo(() => {
@@ -195,6 +209,9 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   }, [me]);
 
   const isDev = me?.role === "DEV";
+  const isAdmin = me?.role === "ADMIN";
+  const canAccessDev = isDev || isAdmin;
+  const canDeleteUsers = isDev || isAdmin;
   const canImportData = me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV";
   const canSeeDailyBanner = me?.role === "MANAGER" || me?.role === "DEV";
   const canViewGlobalBk =
@@ -214,7 +231,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         canViewGlobalBk ? { value: "bk-global", label: "Historiques des imports", icon: BarChart3 } : null,
         canViewGlobalBk ? { value: "bk-monthly", label: "BK mensuel", icon: BarChart3 } : null,
         canViewGlobalBk ? { value: "bk-compare", label: "Comparaison", icon: BarChart3 } : null,
-        isDev ? { value: "dev", label: "Dev", icon: Shield } : null,
+        canAccessDev ? { value: "dev", label: "Administration", icon: Shield } : null,
       ].filter(
         (
           item
@@ -224,7 +241,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
           icon: typeof LayoutDashboard;
         } => Boolean(item)
       ),
-    [canImportData, canViewGlobalBk, isDev]
+    [canAccessDev, canImportData, canViewGlobalBk]
   );
   const activeTabLabel = useMemo(
     () => navItems.find((item) => item.value === activeTab)?.label ?? "Dashboard",
@@ -247,10 +264,13 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       return "Compare deux périodes pour suivre les écarts de performance par indicateur.";
     }
     if (activeTab === "dev") {
+      if (isAdmin) {
+        return "Administre les utilisateurs MANAGER/READONLY sur tes restaurants et leurs associations.";
+      }
       return "Administre les utilisateurs, les rôles et les associations restaurants.";
     }
     return "";
-  }, [activeTab, displayName]);
+  }, [activeTab, displayName, isAdmin]);
 
   async function loadDevUsers() {
     setDevUsersLoading(true);
@@ -277,14 +297,14 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   }
 
   useEffect(() => {
-    if (isDev) {
+    if (canAccessDev) {
       loadDevUsers();
       loadUserRestaurants();
     }
-  }, [isDev]);
+  }, [canAccessDev]);
 
   useEffect(() => {
-    const devTabHidden = activeTab === "dev" && !isDev;
+    const devTabHidden = activeTab === "dev" && !canAccessDev;
     const dataTabHidden = activeTab === "data" && !canImportData;
     const globalTabHidden =
       (activeTab === "bk-global" || activeTab === "bk-monthly" || activeTab === "bk-compare") &&
@@ -292,7 +312,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     if (devTabHidden || dataTabHidden || globalTabHidden) {
       navigate(TAB_TO_PATH.overview, { replace: true });
     }
-  }, [activeTab, canImportData, canViewGlobalBk, isDev, navigate]);
+  }, [activeTab, canAccessDev, canImportData, canViewGlobalBk, navigate]);
 
   function updateAssocUser(userId: number, nextCodes: string[]) {
     setAssocUsers((prev) =>
@@ -785,6 +805,10 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       setCreateMsg("Les mots de passe ne correspondent pas.");
       return;
     }
+    if (isAdmin && newRole !== "READONLY" && newRole !== "MANAGER") {
+      setCreateMsg("Un admin peut uniquement créer des utilisateurs READONLY ou MANAGER.");
+      return;
+    }
     try {
       const res = await createUser({
         email,
@@ -837,6 +861,33 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
             setConfirmDeleteUser(null);
             await deleteUser(userId);
             await loadDevUsers();
+            await loadUserRestaurants();
+          }}
+        />
+        <ConfirmDialog
+          open={Boolean(confirmRemoveAssoc)}
+          title="Supprimer cette association restaurant ?"
+          description={
+            confirmRemoveAssoc
+              ? `Utilisateur: ${confirmRemoveAssoc.userLabel}\nRestaurant: ${confirmRemoveAssoc.code}`
+              : undefined
+          }
+          confirmLabel="Supprimer"
+          busy={assocBusy}
+          onCancel={() => setConfirmRemoveAssoc(null)}
+          onConfirm={async () => {
+            if (!confirmRemoveAssoc) return;
+            setAssocBusy(true);
+            setAssocMsg(null);
+            try {
+              await setUserRestaurants(confirmRemoveAssoc.userId, confirmRemoveAssoc.nextCodes);
+              updateAssocUser(confirmRemoveAssoc.userId, confirmRemoveAssoc.nextCodes);
+            } catch (e: any) {
+              setAssocMsg(e?.message ?? "Erreur suppression association");
+            } finally {
+              setAssocBusy(false);
+              setConfirmRemoveAssoc(null);
+            }
           }}
         />
         <DashboardSidebar
@@ -938,7 +989,11 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
             <ComparisonPage visible={canViewGlobalBk} restaurants={restaurants} />
 
             <DevPage
-              visible={isDev}
+              visible={canAccessDev}
+              isDev={isDev}
+              isAdmin={isAdmin}
+              displayName={displayName}
+              adminRestaurants={restaurants}
               devUsersLoading={devUsersLoading}
               newFirstName={newFirstName}
               setNewFirstName={setNewFirstName}
@@ -958,6 +1013,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
               usersPageItems={usersPageItems}
               meId={me?.id}
               onAskDeleteUser={(id, email) => {
+                if (!canDeleteUsers) return;
                 setConfirmDeleteUser({ id, label: `${email} (id=${id})` });
               }}
               pageSize={pageSize}
@@ -969,18 +1025,11 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
               assocMsg={assocMsg}
               assocUsers={assocUsers}
               onRemoveAssoc={async (u, code) => {
-                if (u.restaurants.length <= 1) {
-                  setAssocMsg("Impossible de retirer le dernier restaurant. Ajoute-en un autre d'abord.");
-                  return;
-                }
-                setAssocMsg(null);
                 const nextCodes = u.restaurants.filter((x) => x.code !== code).map((x) => x.code);
-                try {
-                  await setUserRestaurants(u.id, nextCodes);
-                  updateAssocUser(u.id, nextCodes);
-                } catch (e: any) {
-                  setAssocMsg(e?.message ?? "Erreur suppression association");
-                }
+                const userLabel = (u.first_name || u.last_name)
+                  ? `${u.first_name || ""} ${u.last_name || ""}`.trim()
+                  : u.email;
+                setConfirmRemoveAssoc({ userId: u.id, userLabel, code, nextCodes });
               }}
               onSavedAssign={(userId, codes) => updateAssocUser(userId, codes)}
             />

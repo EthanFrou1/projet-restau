@@ -17,8 +17,16 @@ type Props = {
   onImportNow: () => void;
 };
 
+function formatFrDate(value: string | null) {
+  if (!value) return "";
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("fr-FR");
+}
+
 export function DailyImportBanner({ visible, status, onImportNow }: Props) {
   if (!visible) return null;
+  const dateLabel = formatFrDate(status.date);
 
   return (
     <Card className="border-amber-200 bg-amber-50/60">
@@ -32,13 +40,13 @@ export function DailyImportBanner({ visible, status, onImportNow }: Props) {
         ) : status.missing.length === 0 ? (
           <div className="text-sm">
             Import du jour OK pour tous les restaurants
-            {status.date ? ` (${status.date})` : ""}.
+            {status.date ? ` (${dateLabel})` : ""}.
           </div>
         ) : (
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="text-sm">
               Import du jour manquant
-              {status.date ? ` (${status.date})` : ""} pour :{" "}
+              {status.date ? ` (${dateLabel})` : ""} pour :{" "}
               <span className="font-medium">{status.missing.map((r) => r.code).join(", ")}</span>
             </div>
             <Button variant="outline" onClick={onImportNow}>

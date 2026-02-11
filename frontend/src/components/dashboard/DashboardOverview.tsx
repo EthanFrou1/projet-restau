@@ -320,7 +320,7 @@ export function DashboardOverview({
             <Tabs defaultValue="line" className="space-y-3">
               <TabsList className="h-auto flex-wrap justify-start">
                 <TabsTrigger value="line">Courbe</TabsTrigger>
-                <TabsTrigger value="columns">Colonnes N/N-1</TabsTrigger>
+                <TabsTrigger value="columns">Colonnes</TabsTrigger>
               </TabsList>
               <TabsContent value="line" className="mt-0">
                 <div className="text-sm md:text-base text-muted-foreground mb-3">{periodLabel}</div>
@@ -881,9 +881,9 @@ export function DashboardOverview({
                 <div className="text-base font-semibold">
                   {store.code} - {store.name}
                 </div>
-                <div className="text-sm text-muted-foreground">CA: {compactMoneyFmt.format(store.ca)}</div>
-                <div className="text-sm text-muted-foreground">Clients: {intFmt.format(store.clients)}</div>
-                <div className="text-sm text-muted-foreground">Panier: {moneyFmt.format(mp)}</div>
+                <div className="text-sm text-muted-foreground">CA : {compactMoneyFmt.format(store.ca)}</div>
+                <div className="text-sm text-muted-foreground">Clients : {intFmt.format(store.clients)}</div>
+                <div className="text-sm text-muted-foreground">Panier : {moneyFmt.format(mp)}</div>
                 {change !== null && (
                   <div className="flex items-center gap-1 text-xs">
                     {change >= 0 ? (
@@ -907,6 +907,3 @@ export function DashboardOverview({
     </TabsContent>
   );
 }
-
-
-

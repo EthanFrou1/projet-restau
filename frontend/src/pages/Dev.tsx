@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+﻿import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -33,6 +33,10 @@ type AssocUser = {
 
 type Props = {
   visible: boolean;
+  isDev: boolean;
+  isAdmin: boolean;
+  displayName: string;
+  adminRestaurants: Array<{ id: number; code: string; name: string }>;
   devUsersLoading: boolean;
   newFirstName: string;
   setNewFirstName: (value: string) => void;
@@ -66,6 +70,10 @@ type Props = {
 
 export function DevPage({
   visible,
+  isDev,
+  isAdmin,
+  displayName,
+  adminRestaurants,
   devUsersLoading,
   newFirstName,
   setNewFirstName,
@@ -97,19 +105,50 @@ export function DevPage({
   onSavedAssign,
 }: Props) {
   if (!visible) return null;
+  const adminRestaurantNames = adminRestaurants.map((r) => r.name).join(", ");
+  const trimmedEmail = newEmail.trim();
+  const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
+  const roleAllowed = !isAdmin || newRole === "READONLY" || newRole === "MANAGER";
+  const canCreateUser =
+    Boolean(trimmedEmail) &&
+    emailLooksValid &&
+    newPassword.length >= 8 &&
+    newPassword2.length >= 8 &&
+    newPassword === newPassword2 &&
+    roleAllowed;
 
   return (
     <TabsContent value="dev" className="space-y-4">
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card className="xl:col-span-2">
+        {isAdmin && (
+          <Card className="xl:col-span-2 border-blue-200/70 bg-blue-50/40">
+            <CardHeader>
+              <CardTitle className="text-base">Périmètre administrateur</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                Bonjour {displayName || "admin"}, vous êtes administrateur de {adminRestaurants.length} restaurant
+                {adminRestaurants.length > 1 ? "s" : ""}: {adminRestaurantNames || "aucun"}.
+              </p>
+              <p>
+                Vous pouvez créer et supprimer des utilisateurs <span className="font-medium text-foreground">MANAGER</span> et{" "}
+                <span className="font-medium text-foreground">READONLY</span> dans votre périmètre, et gérer leurs associations
+                restaurants.
+              </p>
+              <p>
+                Vous ne pouvez pas créer/supprimer des comptes <span className="font-medium text-foreground">ADMIN</span> ou{" "}
+                <span className="font-medium text-foreground">DEV</span>, ni gérer des utilisateurs hors de vos restaurants.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
           <CardHeader>
-            <CardTitle className="text-base">Utilisateurs (DEV)</CardTitle>
+            <CardTitle className="text-base">Création d'utilisateur ({isDev ? "DEV" : "ADMIN"})</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {devUsersLoading && (
-              <div className="text-sm md:text-base text-muted-foreground">Chargement des utilisateurs...</div>
-            )}
-            <div className="grid gap-3 md:grid-cols-7">
+            <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <div className="text-sm md:text-base text-muted-foreground mb-1">Prénom</div>
                 <input
@@ -138,6 +177,19 @@ export function DevPage({
                 />
               </div>
               <div>
+                <div className="text-sm md:text-base text-muted-foreground mb-1">Rôle</div>
+                <select
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value as "ADMIN" | "MANAGER" | "READONLY" | "DEV")}
+                >
+                  <option value="READONLY">READONLY</option>
+                  <option value="MANAGER">MANAGER</option>
+                  {isDev && <option value="ADMIN">ADMIN</option>}
+                  {isDev && <option value="DEV">DEV</option>}
+                </select>
+              </div>
+              <div>
                 <div className="text-sm md:text-base text-muted-foreground mb-1">Mot de passe</div>
                 <input
                   className="w-full rounded-md border bg-background px-3 py-2 text-sm"
@@ -157,24 +209,24 @@ export function DevPage({
                   placeholder="Retaper le mot de passe"
                 />
               </div>
-              <div>
-                <div className="text-sm md:text-base text-muted-foreground mb-1">Rôle</div>
-                <select
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  value={newRole}
-                  onChange={(e) => setNewRole(e.target.value as "ADMIN" | "MANAGER" | "READONLY" | "DEV")}
-                >
-                  <option value="READONLY">READONLY</option>
-                  <option value="MANAGER">MANAGER</option>
-                  <option value="ADMIN">ADMIN</option>
-                  <option value="DEV">DEV</option>
-                </select>
-              </div>
-              <div className="flex items-end gap-2">
-                <Button onClick={handleCreateUser}>Créer</Button>
-              </div>
             </div>
-            {createMsg && <div className="text-sm whitespace-pre-wrap">{createMsg}</div>}
+            <div className="flex items-center gap-3">
+              <Button onClick={handleCreateUser} disabled={!canCreateUser}>
+                Créer
+              </Button>
+              {createMsg && <div className="text-sm whitespace-pre-wrap">{createMsg}</div>}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Liste des utilisateurs existants</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {devUsersLoading && (
+              <div className="text-sm md:text-base text-muted-foreground">Chargement des utilisateurs...</div>
+            )}
             <div className="text-sm md:text-base text-muted-foreground">
               {devUsers.length === 0
                 ? "Aucun utilisateur chargé."
@@ -211,14 +263,18 @@ export function DevPage({
                         <TableCell>{u.role}</TableCell>
                         <TableCell>{u.is_active ? "yes" : "no"}</TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            disabled={u.id === meId || u.role === "DEV"}
-                            onClick={() => onAskDeleteUser(u.id, u.email)}
-                          >
-                            Delete
-                          </Button>
+                          {isDev || isAdmin ? (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={u.id === meId || u.role === "DEV" || u.role === "ADMIN"}
+                              onClick={() => onAskDeleteUser(u.id, u.email)}
+                            >
+                              Supprimer
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Non autorisé</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))
@@ -245,12 +301,18 @@ export function DevPage({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Associations utilisateurs ? restaurants</CardTitle>
+            <CardTitle className="text-base">Liste des associations existantes</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-2">
               {assocLoading && <div className="text-sm md:text-base text-muted-foreground">Chargement.</div>}
               {assocMsg && <div className="text-sm text-destructive">{assocMsg}</div>}
+            </div>
+            <div className="text-sm md:text-base text-muted-foreground">
+              Cette liste affiche les associations déjà créées entre utilisateurs et restaurants. Si un utilisateur est
+              associé à un restaurant, il peut consulter ses données. S'il a le rôle{" "}
+              <span className="font-medium text-foreground">MANAGER</span>, il peut aussi importer les données de ce
+              restaurant.
             </div>
 
             <div className="rounded-md border overflow-hidden">
@@ -258,7 +320,7 @@ export function DevPage({
                 <TableHeader>
                   <TableRow>
                     <TableHead>Utilisateur</TableHead>
-                    <TableHead>Rle</TableHead>
+                    <TableHead>Rôle</TableHead>
                     <TableHead>Restaurants</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -303,13 +365,14 @@ export function DevPage({
               </Table>
             </div>
             <div className="text-sm md:text-base text-muted-foreground">
-              Clique sur un restaurant pour le retirer. Pour ajouter, utilise le bloc ci-dessous.
+              Clique sur un restaurant pour retirer cette association. Pour ajouter une association, utilise le bloc
+              de création ci-dessous.
             </div>
           </CardContent>
         </Card>
 
-        <RestaurantManager />
-        <UserRestaurantAssign users={devUsers} onSaved={onSavedAssign} />
+        {isDev && <RestaurantManager />}
+        <UserRestaurantAssign users={devUsers} assocUsers={assocUsers} onSaved={onSavedAssign} />
       </div>
     </TabsContent>
   );

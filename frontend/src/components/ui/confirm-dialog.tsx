@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import type { ButtonProps } from "@/components/ui/button";
 
 type Props = {
   open: boolean;
@@ -6,6 +7,8 @@ type Props = {
   description?: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  confirmVariant?: ButtonProps["variant"];
+  busyLabel?: string;
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -17,6 +20,8 @@ export function ConfirmDialog({
   description,
   confirmLabel = "Supprimer",
   cancelLabel = "Annuler",
+  confirmVariant = "destructive",
+  busyLabel = "Traitement...",
   busy = false,
   onConfirm,
   onCancel,
@@ -38,8 +43,8 @@ export function ConfirmDialog({
           <Button variant="outline" onClick={onCancel} disabled={busy}>
             {cancelLabel}
           </Button>
-          <Button variant="destructive" onClick={onConfirm} disabled={busy}>
-            {busy ? "Suppression..." : confirmLabel}
+          <Button variant={confirmVariant} onClick={onConfirm} disabled={busy}>
+            {busy ? busyLabel : confirmLabel}
           </Button>
         </div>
       </div>
