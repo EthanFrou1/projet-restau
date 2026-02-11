@@ -12,7 +12,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { ComparisonPage } from "@/pages/Comparaison";
-import { DevPage } from "@/pages/Dev";
+import { DevPage } from "@/pages/Administration";
 import { HistoryPage } from "@/pages/HistoriquesImports";
 import { ImportsPage } from "@/pages/MesImports";
 import { MonthlyPage } from "@/pages/BkMensuel";
@@ -195,7 +195,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     return (
       <Badge
         variant="outline"
-        className="border-slate-500/40 bg-gradient-to-b from-slate-800 via-slate-700 to-zinc-800 text-slate-100"
+        className="border-slate-500/40 bg-gradient-to-b from-slate-800 via-slate-700 to-zinc-800 text-slate-100 h-8 px-4 py-2"
       >
         {me.role}
       </Badge>

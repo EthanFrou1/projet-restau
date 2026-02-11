@@ -1,4 +1,6 @@
-﻿import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -11,6 +13,22 @@ import {
 import { RestaurantManager } from "@/components/admin/RestaurantManager";
 import { UserRestaurantAssign } from "@/components/admin/UserRestaurantAssign";
 import { TabsContent } from "@/components/ui/tabs";
+
+function getPasswordStrength(password: string): { score: number; label: string; color: string } {
+  if (!password) return { score: 0, label: "Vide", color: "bg-muted" };
+
+  let score = 0;
+  if (password.length >= 8) score += 1;
+  if (password.length >= 12) score += 1;
+  if (/[a-z]/.test(password)) score += 1;
+  if (/[A-Z]/.test(password)) score += 1;
+  if (/\d/.test(password)) score += 1;
+  if (/[^A-Za-z0-9]/.test(password)) score += 1;
+
+  if (score <= 2) return { score, label: "Faible", color: "bg-red-500" };
+  if (score <= 4) return { score, label: "Moyen", color: "bg-amber-500" };
+  return { score, label: "Fort", color: "bg-emerald-500" };
+}
 
 type DevUser = {
   id: number;
@@ -104,11 +122,14 @@ export function DevPage({
   onRemoveAssoc,
   onSavedAssign,
 }: Props) {
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   if (!visible) return null;
   const adminRestaurantNames = adminRestaurants.map((r) => r.name).join(", ");
   const trimmedEmail = newEmail.trim();
   const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail);
   const roleAllowed = !isAdmin || newRole === "READONLY" || newRole === "MANAGER";
+  const showDevColumns = isDev;
   const canCreateUser =
     Boolean(trimmedEmail) &&
     emailLooksValid &&
@@ -116,6 +137,7 @@ export function DevPage({
     newPassword2.length >= 8 &&
     newPassword === newPassword2 &&
     roleAllowed;
+  const strength = getPasswordStrength(newPassword);
 
   return (
     <TabsContent value="dev" className="space-y-4">
@@ -191,23 +213,52 @@ export function DevPage({
               </div>
               <div>
                 <div className="text-sm md:text-base text-muted-foreground mb-1">Mot de passe</div>
-                <input
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  type="password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="8 caractères minimum"
-                />
+                <div className="relative">
+                  <input
+                    className="w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm"
+                    type={showPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="8 caractères minimum"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <div className="space-y-1 mt-2">
+                  <div className="h-1.5 w-full rounded bg-muted overflow-hidden">
+                    <div
+                      className={`h-full transition-all ${strength.color}`}
+                      style={{ width: `${Math.min(100, (strength.score / 6) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground">Niveau: {strength.label}</div>
+                </div>
               </div>
               <div>
                 <div className="text-sm md:text-base text-muted-foreground mb-1">Confirmer</div>
-                <input
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  type="password"
-                  value={newPassword2}
-                  onChange={(e) => setNewPassword2(e.target.value)}
-                  placeholder="Retaper le mot de passe"
-                />
+                <div className="relative">
+                  <input
+                    className="w-full rounded-md border bg-background px-3 py-2 pr-10 text-sm"
+                    type={showPasswordConfirm ? "text" : "password"}
+                    value={newPassword2}
+                    onChange={(e) => setNewPassword2(e.target.value)}
+                    placeholder="Retaper le mot de passe"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordConfirm((prev) => !prev)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={showPasswordConfirm ? "Masquer la confirmation du mot de passe" : "Afficher la confirmation du mot de passe"}
+                  >
+                    {showPasswordConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -237,31 +288,31 @@ export function DevPage({
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-[80px]">ID</TableHead>
+                    {showDevColumns && <TableHead className="w-[80px]">ID</TableHead>}
                     <TableHead className="w-[140px]">Prénom</TableHead>
                     <TableHead className="w-[140px]">Nom</TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead className="w-[120px]">Rôle</TableHead>
-                    <TableHead className="w-[120px]">Active</TableHead>
+                    {showDevColumns && <TableHead className="w-[120px]">Active</TableHead>}
                     <TableHead className="w-[140px] text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {devUsers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-sm text-muted-foreground">
+                      <TableCell colSpan={showDevColumns ? 7 : 5} className="text-sm text-muted-foreground">
                         Aucun utilisateur chargé.
                       </TableCell>
                     </TableRow>
                   ) : (
                     usersPageItems.map((u) => (
                       <TableRow key={u.id}>
-                        <TableCell>{u.id}</TableCell>
+                        {showDevColumns && <TableCell>{u.id}</TableCell>}
                         <TableCell>{u.first_name || "-"}</TableCell>
                         <TableCell>{u.last_name || "-"}</TableCell>
                         <TableCell className="font-mono text-xs">{u.email}</TableCell>
                         <TableCell>{u.role}</TableCell>
-                        <TableCell>{u.is_active ? "yes" : "no"}</TableCell>
+                        {showDevColumns && <TableCell>{u.is_active ? "yes" : "no"}</TableCell>}
                         <TableCell className="text-right">
                           {isDev || isAdmin ? (
                             <Button
@@ -346,13 +397,14 @@ export function DevPage({
                               <span className="text-sm md:text-base text-muted-foreground">Aucun</span>
                             ) : (
                               u.restaurants.map((r) => (
-                                <Button
-                                  key={`${u.id}-${r.code}`}
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => onRemoveAssoc(u, r.code)}
-                                >
-                                  {r.code}
+                              <Button
+                                key={`${u.id}-${r.code}`}
+                                size="sm"
+                                variant="outline"
+                                className="transition-colors hover:border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                onClick={() => onRemoveAssoc(u, r.code)}
+                              >
+                                {r.code}
                                 </Button>
                               ))
                             )}

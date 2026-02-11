@@ -142,6 +142,9 @@ export function DashboardOverview({
   const [hoveredSalesColumnIndex, setHoveredSalesColumnIndex] = useState<number | null>(null);
   const [hoveredBasketColumnIndex, setHoveredBasketColumnIndex] = useState<number | null>(null);
   const channelColors = ["#0f172a", "#0ea5e9", "#f59e0b"];
+  const visibleStoreQuickView = storeQuickView.filter(
+    (store) => store.ca !== 0 || store.clients !== 0 || store.caN1 !== 0
+  );
 
   return (
     <TabsContent value="overview" className="space-y-4">
@@ -257,55 +260,65 @@ export function DashboardOverview({
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+      <div className="flex gap-4">
         {[
           {
             label: "Chiffre d'affaires",
             value: compactMoneyFmt.format(dashTotals.ca),
             change: pctChange(dashTotals.ca, dashTotals.caN1),
+            color: undefined,
           },
           {
             label: "Nombre de ventes",
             value: intFmt.format(dashTotals.clients),
             change: pctChange(dashTotals.clients, dashTotals.clientsN1),
+            color: undefined,
           },
           {
             label: "Panier moyen",
             value: moneyFmt.format(dashTotals.mp || 0),
             change: pctChange(dashTotals.mp, dashTotals.mpN1),
+            color: undefined,
           },
           {
             label: "CA delivery",
             value: compactMoneyFmt.format(dashTotals.caDelivery),
             change: pctChange(dashTotals.caDelivery, 0),
+            color: channelColors[1],
           },
           {
             label: "CA Click & Collect",
             value: compactMoneyFmt.format(dashTotals.caCnc),
             change: pctChange(dashTotals.caCnc, 0),
+            color: channelColors[2],
           },
           {
             label: "CA Magasin",
             value: compactMoneyFmt.format(dashTotals.caMagasin),
             change: null,
+            color: channelColors[0],
           },
         ].map((kpi) => (
-          <Card key={kpi.label}>
-            <CardContent className="pt-4 space-y-2">
-              <div className="text-sm md:text-base text-muted-foreground">{kpi.label}</div>
-              <div className="text-2xl font-semibold">{kpi.value}</div>
-              {kpi.change !== null && (
-                <div className="flex items-center gap-1 text-sm md:text-base">
-                  {kpi.change >= 0 ? (
-                    <ArrowUpRight className="h-3 w-3 text-emerald-600" />
-                  ) : (
-                    <ArrowDownRight className="h-3 w-3 text-red-600" />
-                  )}
-                  <span className={kpi.change >= 0 ? "text-emerald-600" : "text-red-600"}>
-                    {pctFmt.format(Math.abs(kpi.change))}
-                  </span>
+          <Card key={kpi.label} className="w-full">
+            <CardContent className="px-4 py-4 space-y-2">
+              <div className="text-sm text-muted-foreground">{kpi.label}</div>
+              <div className="flex items-end gap-2">
+                <div className="text-xl font-semibold leading-none" style={kpi.color ? { color: kpi.color } : undefined}>
+                  {kpi.value}
                 </div>
-              )}
+                {kpi.change !== null && (
+                  <div className="flex shrink-0 items-center gap-1 text-sm">
+                    {kpi.change >= 0 ? (
+                      <ArrowUpRight className="h-4 w-4 text-emerald-600" />
+                    ) : (
+                      <ArrowDownRight className="h-4 w-4 text-red-600" />
+                    )}
+                    <span className={kpi.change >= 0 ? "text-emerald-600" : "text-red-600"}>
+                      {pctFmt.format(Math.abs(kpi.change))}
+                    </span>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -313,17 +326,17 @@ export function DashboardOverview({
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Évolution du CA (N vs N-1)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="line" className="space-y-3">
-              <TabsList className="h-auto flex-wrap justify-start">
+          <Tabs defaultValue="line" className="space-y-3">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-base">Évolution du CA (N vs N-1)</CardTitle>
+              <TabsList className="h-auto w-fit flex-wrap justify-start">
                 <TabsTrigger value="line">Courbe</TabsTrigger>
                 <TabsTrigger value="columns">Colonnes</TabsTrigger>
               </TabsList>
+            </CardHeader>
+            <CardContent>
               <TabsContent value="line" className="mt-0">
-                <div className="text-sm md:text-base text-muted-foreground mb-3">{periodLabel}</div>
+                <div className="text-sm md:text-base text-muted-foreground">{periodLabel}</div>
                 <div className="relative">
                   {hoveredTrend && (
                     <div className="absolute right-2 top-2 z-10 rounded-md border bg-background/95 px-3 py-2 text-sm md:text-base shadow-sm">
@@ -378,11 +391,11 @@ export function DashboardOverview({
                           strokeWidth="1"
                         />
                         <text
-                          x={trendChart.padLeft - 8}
-                          y={tick.y + 4}
+                          x={trendChart.padLeft - 10}
+                          y={tick.y + 5}
                           textAnchor="end"
                           className="fill-muted-foreground"
-                          fontSize="11"
+                          fontSize="13"
                         >
                           {tick.value}
                         </text>
@@ -392,21 +405,15 @@ export function DashboardOverview({
                       <text
                         key={`x-${tick.idx}`}
                         x={tick.x}
-                        y={trendChart.padTop + trendChart.h + 16}
+                        y={trendChart.padTop + trendChart.h + 20}
                         textAnchor="middle"
                         className="fill-muted-foreground"
-                        fontSize="11"
+                        fontSize="13"
                       >
                         {tick.label}
                       </text>
                     ))}
-                    <text
-                      x={6}
-                      y={trendChart.padTop + trendChart.h / 2}
-                      transform={`rotate(-90 6 ${trendChart.padTop + trendChart.h / 2})`}
-                      className="fill-muted-foreground"
-                      fontSize="11"
-                    >
+                    <text x={trendChart.padLeft - 24} y={8} className="fill-muted-foreground" fontSize="13">
                       CA (EUR)
                     </text>
                     <text
@@ -414,7 +421,7 @@ export function DashboardOverview({
                       y={trendChart.chartHeight - 1}
                       textAnchor="middle"
                       className="fill-muted-foreground"
-                      fontSize="11"
+                      fontSize="13"
                     >
                       {dashScope === "year" ? "Mois" : "Jours"}
                     </text>
@@ -485,7 +492,7 @@ export function DashboardOverview({
                 <div className="text-sm md:text-base text-muted-foreground mb-3">{periodLabel}</div>
                 <div className="relative overflow-x-auto rounded-md border p-3">
                   {hoveredRevenueColumnIndex !== null && (
-                    <div className="absolute right-3 top-3 z-10 rounded-md border bg-background/95 px-3 py-2 text-sm shadow-sm">
+                    <div className="absolute right-3 top-3 z-10 w-fit rounded-md border bg-background/95 px-3 py-2 text-sm shadow-sm">
                       <div className="font-medium">
                         {dashScope === "year"
                           ? `${dashTrend.labels[hoveredRevenueColumnIndex]} ${dashYearLabel}`
@@ -552,10 +559,10 @@ export function DashboardOverview({
                       );
                     })}
                   </div>
-                  <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 -rotate-90 text-[11px] text-muted-foreground">
+                  <div className="pointer-events-none absolute left-3 top-2 text-[11px] text-muted-foreground">
                     CA (EUR)
                   </div>
-                  <div className="pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 text-[11px] text-muted-foreground">
+                  <div className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 text-[11px] text-muted-foreground">
                     {dashScope === "year" ? "Mois" : "Jours"}
                   </div>
                 </div>
@@ -568,32 +575,36 @@ export function DashboardOverview({
                   </span>
                 </div>
               </TabsContent>
-            </Tabs>
-          </CardContent>
+            </CardContent>
+          </Tabs>
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Répartition du CA par canal</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="bars" className="space-y-3">
-              <TabsList className="h-auto flex-wrap justify-start">
-                <TabsTrigger value="bars">Barres</TabsTrigger>
+          <Tabs defaultValue="donut" className="space-y-3">
+            <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle className="text-base">Répartition du CA par canal</CardTitle>
+              <TabsList className="h-auto w-fit flex-wrap justify-start">
                 <TabsTrigger value="donut">Donut</TabsTrigger>
+                <TabsTrigger value="bars">Barres</TabsTrigger>
               </TabsList>
+            </CardHeader>
+            <CardContent>
               <TabsContent value="bars" className="mt-0">
                 <div className="grid gap-3">
-                  {channelBreakdown.map((row) => {
+                  {channelBreakdown.map((row, idx) => {
                     const width = Math.round((row.value / channelMax) * 100);
+                    const rowColor = channelColors[idx % channelColors.length];
                     return (
                       <div key={row.label} className="space-y-1">
                         <div className="flex items-center justify-between text-sm md:text-base">
-                          <span>{row.label}</span>
-                          <span className="text-muted-foreground">{compactMoneyFmt.format(row.value)}</span>
+                          <span style={{ color: rowColor }}>{row.label}</span>
+                          <span style={{ color: rowColor }}>{compactMoneyFmt.format(row.value)}</span>
                         </div>
                         <div className="h-2 rounded-full bg-muted/40 overflow-hidden">
-                          <div className="h-full rounded-full bg-primary/70" style={{ width: `${width}%` }} />
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${width}%`, backgroundColor: rowColor }}
+                          />
                         </div>
                       </div>
                     );
@@ -666,7 +677,7 @@ export function DashboardOverview({
                           />
                           {row.label}
                         </span>
-                        <span className="text-muted-foreground">
+                        <span style={{ color: channelColors[idx % channelColors.length] }}>
                           {pctFmt.format(row.share)} • {compactMoneyFmt.format(row.value)}
                         </span>
                       </div>
@@ -674,30 +685,34 @@ export function DashboardOverview({
                   </div>
                 </div>
               </TabsContent>
-            </Tabs>
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
-              {channelBreakdown.map((row) => (
+              {channelBreakdown.map((row, idx) => (
                 <div key={`channel-part-${row.label}`} className="rounded-lg border p-3 space-y-2">
                   <div className="text-sm text-muted-foreground">{row.label}</div>
-                  <div className="text-xl font-semibold">{pctFmt.format(row.share)}</div>
-                  <div className="text-sm text-muted-foreground">{compactMoneyFmt.format(row.value)}</div>
+                  <div className="text-xl font-semibold">
+                    <span style={{ color: channelColors[idx % channelColors.length] }}>{pctFmt.format(row.share)}</span>{" "}
+                    <span className="text-base font-normal" style={{ color: channelColors[idx % channelColors.length] }}>
+                      ({compactMoneyFmt.format(row.value)})
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
-          </CardContent>
+            </CardContent>
+          </Tabs>
         </Card>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Ventes et panier moyen (N vs N-1)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="sales" className="space-y-3">
-            <TabsList className="h-auto flex-wrap justify-start">
+        <Tabs defaultValue="sales" className="space-y-3">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="text-base">Ventes et panier moyen (N vs N-1)</CardTitle>
+            <TabsList className="h-auto w-fit flex-wrap justify-start">
               <TabsTrigger value="sales">Ventes</TabsTrigger>
               <TabsTrigger value="basket">Panier moyen</TabsTrigger>
             </TabsList>
+          </CardHeader>
+          <CardContent>
             <TabsContent value="sales" className="mt-0">
               <div className="relative overflow-x-auto rounded-md border p-3">
                 {hoveredSalesColumnIndex !== null && (
@@ -762,10 +777,10 @@ export function DashboardOverview({
                     );
                   })}
                 </div>
-                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 -rotate-90 text-[11px] text-muted-foreground">
+                <div className="pointer-events-none absolute left-3 top-2 text-[11px] text-muted-foreground">
                   Ventes
                 </div>
-                <div className="pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 text-[11px] text-muted-foreground">
+                <div className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 text-[11px] text-muted-foreground">
                   {dashScope === "year" ? "Mois" : "Jours"}
                 </div>
               </div>
@@ -848,10 +863,10 @@ export function DashboardOverview({
                     );
                   })}
                 </div>
-                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 -rotate-90 text-[11px] text-muted-foreground">
+                <div className="pointer-events-none absolute left-3 top-2 text-[11px] text-muted-foreground">
                   Panier moyen (EUR)
                 </div>
-                <div className="pointer-events-none absolute bottom-1 left-1/2 -translate-x-1/2 text-[11px] text-muted-foreground">
+                <div className="pointer-events-none absolute bottom-0 left-1/2 -translate-x-1/2 text-[11px] text-muted-foreground">
                   {dashScope === "year" ? "Mois" : "Jours"}
                 </div>
               </div>
@@ -864,16 +879,16 @@ export function DashboardOverview({
                 </span>
               </div>
             </TabsContent>
-          </Tabs>
-        </CardContent>
+          </CardContent>
+        </Tabs>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Vue rapide magasins - {periodLabel}</CardTitle>
+          <CardTitle className="text-base mb-3">Vue rapide magasins - {periodLabel}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {storeQuickView.map((store) => {
+          {visibleStoreQuickView.map((store) => {
             const change = pctChange(store.ca, store.caN1);
             const mp = store.clients ? store.ca / store.clients : 0;
             return (
@@ -881,25 +896,25 @@ export function DashboardOverview({
                 <div className="text-base font-semibold">
                   {store.code} - {store.name}
                 </div>
-                <div className="text-sm text-muted-foreground">CA : {compactMoneyFmt.format(store.ca)}</div>
-                <div className="text-sm text-muted-foreground">Clients : {intFmt.format(store.clients)}</div>
-                <div className="text-sm text-muted-foreground">Panier : {moneyFmt.format(mp)}</div>
-                {change !== null && (
-                  <div className="flex items-center gap-1 text-xs">
-                    {change >= 0 ? (
-                      <ArrowUpRight className="h-3 w-3 text-emerald-600" />
-                    ) : (
-                      <ArrowDownRight className="h-3 w-3 text-red-600" />
-                    )}
-                    <span className={change >= 0 ? "text-emerald-600" : "text-red-600"}>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>CA : {compactMoneyFmt.format(store.ca)}</span>
+                  {change !== null && Math.abs(change) > 0 && (
+                    <span className={change >= 0 ? "inline-flex items-center gap-1 text-emerald-600" : "inline-flex items-center gap-1 text-red-600"}>
+                      {change >= 0 ? (
+                        <ArrowUpRight className="h-3 w-3" />
+                      ) : (
+                        <ArrowDownRight className="h-3 w-3" />
+                      )}
                       {pctFmt.format(Math.abs(change))} vs N-1
                     </span>
-                  </div>
-                )}
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground">Clients : {intFmt.format(store.clients)}</div>
+                <div className="text-sm text-muted-foreground">Panier moyen : {moneyFmt.format(mp)}</div>
               </div>
             );
           })}
-          {storeQuickView.length === 0 && (
+          {visibleStoreQuickView.length === 0 && (
             <div className="text-sm text-muted-foreground">Aucun restaurant disponible.</div>
           )}
         </CardContent>
