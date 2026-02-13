@@ -42,7 +42,7 @@ export function OverdueImportsCard({
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
-          <CardTitle>Imports en retard</CardTitle>
+          <CardTitle className="mb-2">Imports en retard</CardTitle>
           <label className="inline-flex items-center gap-2 text-sm text-muted-foreground">
             <input
               type="checkbox"

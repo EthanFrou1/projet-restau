@@ -131,7 +131,7 @@ export function BkReportBrowser({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Historiques des imports BK</CardTitle>
+        <CardTitle className="mb-2">Historiques des imports BK</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="text-sm text-muted-foreground">

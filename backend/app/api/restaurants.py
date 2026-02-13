@@ -16,9 +16,9 @@ def my_restaurants(
 ):
     if user.role == Role.DEV.value:
         rows = db.query(Restaurant).order_by(Restaurant.code.asc()).all()
-        return [{"id": r.id, "code": r.code, "name": r.name} for r in rows]
+        return [{"id": r.id, "code": r.code, "name": r.name, "zone": r.zone} for r in rows]
 
-    return [{"id": r.id, "code": r.code, "name": r.name} for r in user.restaurants]
+    return [{"id": r.id, "code": r.code, "name": r.name, "zone": r.zone} for r in user.restaurants]
 
 
 @router.get("")
@@ -27,4 +27,4 @@ def list_restaurants(
     _user=Depends(require_roles([Role.ADMIN, Role.DEV])),
 ):
     rows = db.query(Restaurant).order_by(Restaurant.code.asc()).all()
-    return [{"id": r.id, "code": r.code, "name": r.name} for r in rows]
+    return [{"id": r.id, "code": r.code, "name": r.name, "zone": r.zone} for r in rows]

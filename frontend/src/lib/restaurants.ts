@@ -1,22 +1,25 @@
 import { apiFetch } from "@/lib/api";
 
+export type RestaurantZone = "NON_DEFINIE" | "ZONE_EST" | "ZONE_OUEST" | "ZONE_SUD" | "ZONE_NORD";
+export type RestaurantDto = { id: number; code: string; name: string; zone: RestaurantZone };
+
 export async function getMyRestaurants() {
-  return apiFetch<Array<{ id: number; code: string; name: string }>>("/restaurants/mine");
+  return apiFetch<RestaurantDto[]>("/restaurants/mine");
 }
 
 export async function listRestaurants() {
-  return apiFetch<Array<{ id: number; code: string; name: string }>>("/debug/restaurants");
+  return apiFetch<RestaurantDto[]>("/debug/restaurants");
 }
 
-export async function createRestaurant(payload: { code: string; name: string }) {
-  return apiFetch<{ id: number; code: string; name: string }>("/debug/restaurants", {
+export async function createRestaurant(payload: { code: string; name: string; zone: RestaurantZone }) {
+  return apiFetch<RestaurantDto>("/debug/restaurants", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
 export async function setUserRestaurants(userId: number, restaurantCodes: string[]) {
-  return apiFetch<Array<{ id: number; code: string; name: string }>>(
+  return apiFetch<RestaurantDto[]>(
     `/debug/users/${userId}/restaurants`,
     {
       method: "PUT",
@@ -34,7 +37,7 @@ export async function listUsersWithRestaurants() {
       is_active: boolean;
       first_name?: string | null;
       last_name?: string | null;
-      restaurants: Array<{ id: number; code: string; name: string }>;
+      restaurants: RestaurantDto[];
     }>
   >("/debug/users-with-restaurants");
 }

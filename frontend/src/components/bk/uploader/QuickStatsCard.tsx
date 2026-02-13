@@ -19,7 +19,7 @@ export function QuickStatsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Données rapides</CardTitle>
+        <CardTitle className="mb-2 text-base">Données rapides</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 md:grid-cols-4">

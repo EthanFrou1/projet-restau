@@ -141,7 +141,7 @@ export function DashboardOverview({
   const [hoveredRevenueColumnIndex, setHoveredRevenueColumnIndex] = useState<number | null>(null);
   const [hoveredSalesColumnIndex, setHoveredSalesColumnIndex] = useState<number | null>(null);
   const [hoveredBasketColumnIndex, setHoveredBasketColumnIndex] = useState<number | null>(null);
-  const channelColors = ["#0f172a", "#0ea5e9", "#f59e0b"];
+  const channelColors = ["#0f766e", "#3b82f6", "#f59e0b"];
   const visibleStoreQuickView = storeQuickView.filter(
     (store) => store.ca !== 0 || store.clients !== 0 || store.caN1 !== 0
   );
@@ -324,7 +324,7 @@ export function DashboardOverview({
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 2xl:grid-cols-2">
         <Card>
           <Tabs defaultValue="line" className="space-y-3">
             <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -336,8 +336,8 @@ export function DashboardOverview({
             </CardHeader>
             <CardContent>
               <TabsContent value="line" className="mt-0">
-                <div className="text-sm md:text-base text-muted-foreground">{periodLabel}</div>
-                <div className="relative">
+                <div className="mb-3 text-sm md:text-base text-muted-foreground">{periodLabel}</div>
+                <div className="relative mt-1">
                   {hoveredTrend && (
                     <div className="absolute right-2 top-2 z-10 rounded-md border bg-background/95 px-3 py-2 text-sm md:text-base shadow-sm">
                       <div className="font-medium">
@@ -357,7 +357,7 @@ export function DashboardOverview({
                   )}
                   <svg
                     viewBox={`0 0 ${trendChart.chartWidth} ${trendChart.chartHeight}`}
-                    className="w-full h-72"
+                    className="h-82 w-full"
                     onMouseLeave={() => setHoveredTrendIndex(null)}
                   >
                     <rect x="0" y="0" width={trendChart.chartWidth} height={trendChart.chartHeight} fill="transparent" />
@@ -413,7 +413,12 @@ export function DashboardOverview({
                         {tick.label}
                       </text>
                     ))}
-                    <text x={trendChart.padLeft - 24} y={8} className="fill-muted-foreground" fontSize="13">
+                    <text
+                      x={trendChart.padLeft - 24}
+                      y={trendChart.padTop - 10}
+                      className="fill-muted-foreground"
+                      fontSize="13"
+                    >
                       CA (EUR)
                     </text>
                     <text
@@ -656,10 +661,28 @@ export function DashboardOverview({
                         </div>
                       ) : (
                         <div>
-                          <div className="text-sm font-medium">{channelBreakdown[hoveredChannelIndex]?.label}</div>
-                          <div className="text-xs text-muted-foreground">
+                          <div
+                            className="text-sm font-medium"
+                            style={{
+                              color:
+                                channelColors[
+                                  hoveredChannelIndex % channelColors.length
+                                ],
+                            }}
+                          >
+                            {channelBreakdown[hoveredChannelIndex]?.label}
+                          </div>
+                          <div
+                            className="text-xs"
+                            style={{
+                              color:
+                                channelColors[
+                                  hoveredChannelIndex % channelColors.length
+                                ],
+                            }}
+                          >
                             {pctFmt.format(channelBreakdown[hoveredChannelIndex]?.share ?? 0)} •{" "}
-                            <span className="font-semibold text-foreground">
+                            <span className="font-semibold">
                               {compactMoneyFmt.format(channelBreakdown[hoveredChannelIndex]?.value ?? 0)}
                             </span>
                           </div>
@@ -725,10 +748,20 @@ export function DashboardOverview({
                           : `${salesTrend.labels[hoveredSalesColumnIndex]}/${dashMonthLabel}/${dashYearLabel}`}
                     </div>
                     <div className="text-muted-foreground">
-                      Ventes N: <span className="font-semibold text-foreground">{intFmt.format(salesTrend.n[hoveredSalesColumnIndex] ?? 0)}</span>
+                      Ventes N:{" "}
+                      <span className="font-semibold text-foreground">
+                        {(salesTrend.n[hoveredSalesColumnIndex] ?? 0) === 0
+                          ? "—"
+                          : intFmt.format(salesTrend.n[hoveredSalesColumnIndex] ?? 0)}
+                      </span>
                     </div>
                     <div className="text-muted-foreground">
-                      Ventes N-1: <span className="font-semibold text-foreground">{intFmt.format(salesTrend.n1[hoveredSalesColumnIndex] ?? 0)}</span>
+                      Ventes N-1:{" "}
+                      <span className="font-semibold text-foreground">
+                        {(salesTrend.n1[hoveredSalesColumnIndex] ?? 0) === 0
+                          ? "—"
+                          : intFmt.format(salesTrend.n1[hoveredSalesColumnIndex] ?? 0)}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -740,10 +773,14 @@ export function DashboardOverview({
                     const n = salesTrend.n[idx] ?? 0;
                     const n1 = salesTrend.n1[idx] ?? 0;
                     const max = Math.max(...salesTrend.n, ...salesTrend.n1, 1);
-                    const nHeight = Math.max(3, Math.round((n / max) * 300));
-                    const n1Height = Math.max(3, Math.round((n1 / max) * 300));
+                    const nHeight = Math.max(8, Math.round((n / max) * 300));
+                    const n1Height = Math.max(8, Math.round((n1 / max) * 300));
                     return (
-                      <div key={`sales-col-${label}-${idx}`} className="w-12 shrink-0 flex flex-col items-center gap-2">
+                      <div
+                        key={`sales-col-${label}-${idx}`}
+                        className="w-12 shrink-0 flex flex-col items-center gap-2"
+                        onMouseEnter={() => setHoveredSalesColumnIndex(idx)}
+                      >
                         <div className="h-[300px] w-full flex items-end justify-center gap-1">
                           <div className="w-4 flex flex-col items-center justify-end">
                             {n > 0 && (
@@ -755,7 +792,6 @@ export function DashboardOverview({
                               className="w-4 rounded-t bg-primary/85 cursor-pointer"
                               style={{ height: `${nHeight}px` }}
                               title={`Ventes N ${label}: ${intFmt.format(n)}`}
-                              onMouseEnter={() => setHoveredSalesColumnIndex(idx)}
                             />
                           </div>
                           <div className="w-4 flex flex-col items-center justify-end">
@@ -768,7 +804,6 @@ export function DashboardOverview({
                               className="w-4 rounded-t bg-muted-foreground/75 cursor-pointer"
                               style={{ height: `${n1Height}px` }}
                               title={`Ventes N-1 ${label}: ${intFmt.format(n1)}`}
-                              onMouseEnter={() => setHoveredSalesColumnIndex(idx)}
                             />
                           </div>
                         </div>
@@ -807,13 +842,17 @@ export function DashboardOverview({
                     <div className="text-muted-foreground">
                       Panier moyen N:{" "}
                       <span className="font-semibold text-foreground">
-                        {moneyFmt.format(basketTrend.n[hoveredBasketColumnIndex] ?? 0)}
+                        {(basketTrend.n[hoveredBasketColumnIndex] ?? 0) === 0
+                          ? "—"
+                          : moneyFmt.format(basketTrend.n[hoveredBasketColumnIndex] ?? 0)}
                       </span>
                     </div>
                     <div className="text-muted-foreground">
                       Panier moyen N-1:{" "}
                       <span className="font-semibold text-foreground">
-                        {moneyFmt.format(basketTrend.n1[hoveredBasketColumnIndex] ?? 0)}
+                        {(basketTrend.n1[hoveredBasketColumnIndex] ?? 0) === 0
+                          ? "—"
+                          : moneyFmt.format(basketTrend.n1[hoveredBasketColumnIndex] ?? 0)}
                       </span>
                     </div>
                   </div>
@@ -826,10 +865,14 @@ export function DashboardOverview({
                     const n = basketTrend.n[idx] ?? 0;
                     const n1 = basketTrend.n1[idx] ?? 0;
                     const max = Math.max(...basketTrend.n, ...basketTrend.n1, 1);
-                    const nHeight = Math.max(3, Math.round((n / max) * 300));
-                    const n1Height = Math.max(3, Math.round((n1 / max) * 300));
+                    const nHeight = Math.max(8, Math.round((n / max) * 300));
+                    const n1Height = Math.max(8, Math.round((n1 / max) * 300));
                     return (
-                      <div key={`basket-col-${label}-${idx}`} className="w-12 shrink-0 flex flex-col items-center gap-2">
+                      <div
+                        key={`basket-col-${label}-${idx}`}
+                        className="w-12 shrink-0 flex flex-col items-center gap-2"
+                        onMouseEnter={() => setHoveredBasketColumnIndex(idx)}
+                      >
                         <div className="h-[300px] w-full flex items-end justify-center gap-1">
                           <div className="w-4 flex flex-col items-center justify-end">
                             {n > 0 && (
@@ -841,7 +884,6 @@ export function DashboardOverview({
                               className="w-4 rounded-t bg-primary/85 cursor-pointer"
                               style={{ height: `${nHeight}px` }}
                               title={`Panier moyen N ${label}: ${moneyFmt.format(n)}`}
-                              onMouseEnter={() => setHoveredBasketColumnIndex(idx)}
                             />
                           </div>
                           <div className="w-4 flex flex-col items-center justify-end">
@@ -854,7 +896,6 @@ export function DashboardOverview({
                               className="w-4 rounded-t bg-muted-foreground/75 cursor-pointer"
                               style={{ height: `${n1Height}px` }}
                               title={`Panier moyen N-1 ${label}: ${moneyFmt.format(n1)}`}
-                              onMouseEnter={() => setHoveredBasketColumnIndex(idx)}
                             />
                           </div>
                         </div>

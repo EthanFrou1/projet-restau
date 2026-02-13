@@ -1,16 +1,28 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { createRestaurant, listRestaurants } from "@/lib/restaurants";
+import {
+  createRestaurant,
+  listRestaurants,
+  type RestaurantDto,
+  type RestaurantZone,
+} from "@/lib/restaurants";
 
-type Restaurant = { id: number; code: string; name: string };
+const ZONE_OPTIONS: RestaurantZone[] = [
+  "NON_DEFINIE",
+  "ZONE_EST",
+  "ZONE_OUEST",
+  "ZONE_SUD",
+  "ZONE_NORD",
+];
 
 export function RestaurantManager() {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
+  const [zone, setZone] = useState<RestaurantZone>("NON_DEFINIE");
   const [msg, setMsg] = useState<string | null>(null);
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [restaurants, setRestaurants] = useState<RestaurantDto[]>([]);
   const [page, setPage] = useState(1);
   const pageSize = 10;
   const totalPages = Math.max(1, Math.ceil(restaurants.length / pageSize));
@@ -21,7 +33,7 @@ export function RestaurantManager() {
       const data = await listRestaurants();
       setRestaurants(data);
       setPage(1);
-    }catch (e: any) {
+    } catch (e: any) {
       setMsg(`❌ ${e?.message ?? "Erreur"}`);
     }
   }
@@ -39,10 +51,11 @@ export function RestaurantManager() {
       return;
     }
     try {
-      await createRestaurant({ code: c, name: n });
+      await createRestaurant({ code: c, name: n, zone });
       setMsg("✅ Restaurant créé.");
       setCode("");
       setName("");
+      setZone("NON_DEFINIE");
       await loadRestaurants();
     } catch (e: any) {
       setMsg(`❌ ${e?.message ?? "Erreur"}`);
@@ -56,18 +69,34 @@ export function RestaurantManager() {
       </CardHeader>
       <CardContent className="space-y-3">
         {restaurants.length === 0 && (
-          <div className="text-xs text-muted-foreground">
-            Aucun restaurant pour l'instant.
-          </div>
+          <div className="text-xs text-muted-foreground">Aucun restaurant pour l'instant.</div>
         )}
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <div>
-            <div className="text-xs text-muted-foreground mb-1">Code</div>
+            <div className="mb-1 text-xs text-muted-foreground">Code</div>
             <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="TLS-SO" />
           </div>
           <div>
-            <div className="text-xs text-muted-foreground mb-1">Nom</div>
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Toulouse Saint Orens" />
+            <div className="mb-1 text-xs text-muted-foreground">Nom</div>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Toulouse Saint Orens"
+            />
+          </div>
+          <div>
+            <div className="mb-1 text-xs text-muted-foreground">Zone</div>
+            <select
+              className="h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
+              value={zone}
+              onChange={(e) => setZone(e.target.value as RestaurantZone)}
+            >
+              {ZONE_OPTIONS.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex items-end gap-2">
             <Button onClick={create}>Créer</Button>
@@ -78,7 +107,7 @@ export function RestaurantManager() {
 
         {restaurants.length > 0 && (
           <div className="text-xs text-muted-foreground">
-            Existants: {pageItems.map((r) => `${r.code} (${r.name})`).join(", ")}
+            Existants: {pageItems.map((r) => `${r.code} (${r.name}, ${r.zone})`).join(", ")}
           </div>
         )}
 
@@ -109,4 +138,3 @@ export function RestaurantManager() {
     </Card>
   );
 }
-

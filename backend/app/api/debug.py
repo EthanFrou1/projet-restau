@@ -8,7 +8,7 @@ from app.api.auth_deps import require_roles
 from app.core.roles import Role
 from app.core.security import hash_password
 from app.models.user import User
-from app.models.restaurant import Restaurant
+from app.models.restaurant import Restaurant, RestaurantZone
 from app.core.audit import write_audit_log
 from app.core.utils import normalize_email
 
@@ -78,6 +78,7 @@ class RestaurantOut(BaseModel):
     id: int
     code: str
     name: str
+    zone: RestaurantZone
 
 class UserWithRestaurantsOut(BaseModel):
     id: int
@@ -91,6 +92,7 @@ class UserWithRestaurantsOut(BaseModel):
 class RestaurantCreateIn(BaseModel):
     code: str = Field(min_length=2)
     name: str = Field(min_length=2)
+    zone: RestaurantZone = RestaurantZone.NON_DEFINIE
 
 class UserRestaurantsIn(BaseModel):
     restaurant_codes: list[str] = Field(default_factory=list)
@@ -162,7 +164,7 @@ def list_users_with_restaurants(
             first_name=u.first_name,
             last_name=u.last_name,
             restaurants=[
-                RestaurantOut(id=r.id, code=r.code, name=r.name)
+                RestaurantOut(id=r.id, code=r.code, name=r.name, zone=r.zone)
                 for r in ([x for x in u.restaurants if x.code in admin_codes] if _user.role == Role.ADMIN.value else u.restaurants)
             ],
         )
@@ -175,9 +177,12 @@ def list_restaurants(
     _user=Depends(require_roles([Role.DEV, Role.ADMIN])),
 ):
     if _user.role == Role.ADMIN.value:
-        return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in sorted(_user.restaurants, key=lambda x: x.code)]
+        return [
+            RestaurantOut(id=r.id, code=r.code, name=r.name, zone=r.zone)
+            for r in sorted(_user.restaurants, key=lambda x: x.code)
+        ]
     rows = db.query(Restaurant).order_by(Restaurant.code.asc()).all()
-    return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in rows]
+    return [RestaurantOut(id=r.id, code=r.code, name=r.name, zone=r.zone) for r in rows]
 
 @router.post("/restaurants", response_model=RestaurantOut)
 def create_restaurant(
@@ -190,11 +195,11 @@ def create_restaurant(
     existing = db.query(Restaurant).filter(Restaurant.code == code).first()
     if existing:
         raise HTTPException(status_code=400, detail="Restaurant code already exists")
-    restaurant = Restaurant(code=code, name=name)
+    restaurant = Restaurant(code=code, name=name, zone=payload.zone)
     db.add(restaurant)
     db.commit()
     db.refresh(restaurant)
-    return RestaurantOut(id=restaurant.id, code=restaurant.code, name=restaurant.name)
+    return RestaurantOut(id=restaurant.id, code=restaurant.code, name=restaurant.name, zone=restaurant.zone)
 
 @router.put("/users/{user_id}/restaurants", response_model=List[RestaurantOut])
 def set_user_restaurants(
@@ -235,13 +240,13 @@ def set_user_restaurants(
         user.restaurants = outside_scope_restaurants + scoped_restaurants
         db.commit()
         db.refresh(user)
-        return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in scoped_restaurants]
+        return [RestaurantOut(id=r.id, code=r.code, name=r.name, zone=r.zone) for r in scoped_restaurants]
 
     user.restaurants = restaurants
     db.commit()
     db.refresh(user)
 
-    return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in user.restaurants]
+    return [RestaurantOut(id=r.id, code=r.code, name=r.name, zone=r.zone) for r in user.restaurants]
 
 @router.delete("/users/{user_id}")
 def delete_user(

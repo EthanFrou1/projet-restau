@@ -17,6 +17,7 @@ import { HistoryPage } from "@/pages/HistoriquesImports";
 import { ImportsPage } from "@/pages/MesImports";
 import { MonthlyPage } from "@/pages/BkMensuel";
 import { OverviewPage } from "@/pages/Dashboard";
+import { DirectionPage } from "@/pages/RevueDirection";
 import type { ReimportRequest } from "@/components/bk/uploader/types";
 
 type Me = {
@@ -54,7 +55,12 @@ type MonthlyItem = {
   } | null;
 };
 
-type Restaurant = { id: number; code: string; name: string };
+type Restaurant = {
+  id: number;
+  code: string;
+  name: string;
+  zone: "NON_DEFINIE" | "ZONE_EST" | "ZONE_OUEST" | "ZONE_SUD" | "ZONE_NORD";
+};
 type ReportListItem = {
   id: number;
   restaurant_code: string;
@@ -62,7 +68,14 @@ type ReportListItem = {
   created_at: string;
 };
 
-type TabValue = "overview" | "data" | "bk-global" | "bk-monthly" | "bk-compare" | "dev";
+type TabValue =
+  | "overview"
+  | "data"
+  | "bk-global"
+  | "bk-monthly"
+  | "bk-compare"
+  | "executive"
+  | "dev";
 type DashScope = "year" | "month" | "day";
 
 const TAB_TO_PATH: Record<TabValue, string> = {
@@ -71,6 +84,7 @@ const TAB_TO_PATH: Record<TabValue, string> = {
   "bk-global": "/historiques-imports",
   "bk-monthly": "/bk-mensuel",
   "bk-compare": "/comparaison",
+  executive: "/revue-direction",
   dev: "/administration",
 };
 
@@ -79,6 +93,7 @@ function pathToTab(pathname: string): TabValue {
   if (pathname === "/historiques-imports") return "bk-global";
   if (pathname === "/bk-mensuel") return "bk-monthly";
   if (pathname === "/comparaison") return "bk-compare";
+  if (pathname === "/revue-direction") return "executive";
   if (pathname === "/dev" || pathname === "/administration") return "dev";
   return "overview";
 }
@@ -199,7 +214,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       >
         {me.role}
       </Badge>
-    );
+    );/*  */
   }, [me]);
 
   const displayName = useMemo(() => {
@@ -231,6 +246,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         canViewGlobalBk ? { value: "bk-global", label: "Historiques des imports", icon: BarChart3 } : null,
         canViewGlobalBk ? { value: "bk-monthly", label: "BK mensuel", icon: BarChart3 } : null,
         canViewGlobalBk ? { value: "bk-compare", label: "Comparaison", icon: BarChart3 } : null,
+        canViewGlobalBk ? { value: "executive", label: "Revue Direction", icon: BarChart3 } : null,
         canAccessDev ? { value: "dev", label: "Administration", icon: Shield } : null,
       ].filter(
         (
@@ -262,6 +278,9 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     }
     if (activeTab === "bk-compare") {
       return "Compare deux périodes pour suivre les écarts de performance par indicateur.";
+    }
+    if (activeTab === "executive") {
+      return "Vue annuelle synthétique orientée direction avec comparatif zone/restaurant et export PDF.";
     }
     if (activeTab === "dev") {
       if (isAdmin) {
@@ -307,7 +326,12 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     const devTabHidden = activeTab === "dev" && !canAccessDev;
     const dataTabHidden = activeTab === "data" && !canImportData;
     const globalTabHidden =
-      (activeTab === "bk-global" || activeTab === "bk-monthly" || activeTab === "bk-compare") &&
+      (
+        activeTab === "bk-global" ||
+        activeTab === "bk-monthly" ||
+        activeTab === "bk-compare" ||
+        activeTab === "executive"
+      ) &&
       !canViewGlobalBk;
     if (devTabHidden || dataTabHidden || globalTabHidden) {
       navigate(TAB_TO_PATH.overview, { replace: true });
@@ -686,10 +710,10 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   const trendChart = useMemo(() => {
     const padLeft = 56;
     const padRight = 20;
-    const padTop = 20;
-    const padBottom = 34;
+    const padTop = 28;
+    const padBottom = 38;
     const chartWidth = 640;
-    const chartHeight = 240;
+    const chartHeight = 300;
     const w = chartWidth - padLeft - padRight;
     const h = chartHeight - padTop - padBottom;
     const maxValue = Math.max(...dashTrend.n, ...dashTrend.n1, 1);
@@ -987,6 +1011,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
 
             <MonthlyPage visible={canViewGlobalBk} restaurants={restaurants} />
             <ComparisonPage visible={canViewGlobalBk} restaurants={restaurants} />
+            <DirectionPage visible={canViewGlobalBk} restaurants={restaurants} />
 
             <DevPage
               visible={canAccessDev}
@@ -1039,10 +1064,6 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     </div>
   );
 }
-
-
-
-
 
 
 

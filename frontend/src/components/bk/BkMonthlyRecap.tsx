@@ -562,7 +562,7 @@ export function BkMonthlyRecap({ restaurants }: Props) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Récap mensuel BK</CardTitle>
+        <CardTitle className="mb-2">Récap mensuel BK</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="text-sm text-muted-foreground">

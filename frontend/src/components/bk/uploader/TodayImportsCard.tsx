@@ -32,7 +32,7 @@ export function TodayImportsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Imports à faire aujourd'hui</CardTitle>
+        <CardTitle className="mb-2">Imports à faire aujourd'hui</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {statusError && <div className="text-sm text-destructive">{statusError}</div>}
