@@ -26,22 +26,18 @@ function formatFrDate(value: string | null) {
 
 export function DailyImportBanner({ visible, status, onImportNow }: Props) {
   if (!visible) return null;
+  if (!status.loading && !status.error && !status.noRestaurants && status.missing.length === 0) return null;
   const dateLabel = formatFrDate(status.date);
 
   return (
     <Card className="border-amber-200 bg-amber-50/60">
-      <CardContent className="pt-4 space-y-2">
+      <CardContent className="p-4 mt-0 space-y-2">
         {status.loading ? (
           <div className="text-sm text-muted-foreground">Vérification de l'import du jour...</div>
         ) : status.error ? (
           <div className="text-sm text-destructive">{status.error}</div>
         ) : status.noRestaurants ? (
           <div className="text-sm text-muted-foreground">Aucun restaurant associé à ton compte.</div>
-        ) : status.missing.length === 0 ? (
-          <div className="text-sm">
-            Import du jour OK pour tous les restaurants
-            {status.date ? ` (${dateLabel})` : ""}.
-          </div>
         ) : (
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="text-sm">

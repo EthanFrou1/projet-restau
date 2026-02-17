@@ -190,5 +190,11 @@ class BKDailyKpi(Base):
     client_click_collect: Mapped[int] = mapped_column(Integer, nullable=True)
     client_n1: Mapped[int] = mapped_column(Integer, nullable=True)
     cash_diff: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    heures_personnel: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    heures_travail: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    taux_horaire: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    osat_score: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    gxi_score: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
+    google_score: Mapped[float] = mapped_column(Numeric(14, 6), nullable=True)
 
     report: Mapped[BKDailyReport] = relationship(back_populates="kpi")

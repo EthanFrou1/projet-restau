@@ -5,8 +5,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
-from app.api.schemas.auth import LoginRequest, TokenResponse
-from app.core.security import verify_password
+from app.api.schemas.auth import (
+    FirstLoginPasswordChangeRequest,
+    LoginRequest,
+    MeResponse,
+    TokenResponse,
+)
+from app.core.security import hash_password, verify_password
 from app.core.jwt import (
     create_access_token,
     create_refresh_token,
@@ -55,6 +60,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
     return {
         "access_token": access_token,
         "expires_at": expires_at.isoformat(),
+        "must_change_password": bool(user.must_change_password),
     }
 
 
@@ -93,7 +99,7 @@ def logout(response: Response, db: Session = Depends(get_db), user=Depends(get_c
     return {"ok": True}
 
 
-@router.get("/me")
+@router.get("/me", response_model=MeResponse)
 def me(user=Depends(get_current_user), db: Session = Depends(get_db)):
     write_audit_log(db, "auth.me", user.email, f"user:{user.id}")
     return {
@@ -103,4 +109,51 @@ def me(user=Depends(get_current_user), db: Session = Depends(get_db)):
         "is_active": user.is_active,
         "first_name": user.first_name,
         "last_name": user.last_name,
+        "must_change_password": bool(user.must_change_password),
     }
+
+
+@router.post("/change-password-first-login")
+def change_password_first_login(
+    payload: FirstLoginPasswordChangeRequest,
+    user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if not user.must_change_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password change is not required for this account",
+        )
+
+    if payload.new_password != payload.new_password_confirm:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password and confirmation do not match",
+        )
+
+    if len(payload.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must have at least 8 characters",
+        )
+
+    if not verify_password(payload.current_password, user.hashed_password):
+        write_audit_log(db, "auth.password_change.failed", user.email, "reason:invalid_current_password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is invalid",
+        )
+
+    if verify_password(payload.new_password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be different from temporary password",
+        )
+
+    user.hashed_password = hash_password(payload.new_password)
+    user.must_change_password = False
+    db.add(user)
+    db.commit()
+
+    write_audit_log(db, "auth.password_change.success", user.email, f"user:{user.id}")
+    return {"ok": True}

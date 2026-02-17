@@ -40,6 +40,18 @@ type MonthlyItem = {
     client_click_collect: number | null;
     client_n1: number | null;
     cash_diff: number | null;
+    heures_personnel: number | null;
+    heures_personnel_n1: number | null;
+    heures_travail: number | null;
+    heures_travail_n1: number | null;
+    taux_horaire: number | null;
+    taux_horaire_n1: number | null;
+    osat_score: number | null;
+    osat_score_n1: number | null;
+    gxi_score: number | null;
+    gxi_score_n1: number | null;
+    google_score: number | null;
+    google_score_n1: number | null;
   } | null;
 };
 
@@ -558,6 +570,212 @@ export function BkMonthlyRecap({ restaurants }: Props) {
   const colClientsClass = "bg-sky-50/70";
   const colMpClass = "bg-emerald-50/70";
   const colCncClass = "bg-teal-50/60";
+  const workforceStats = useMemo(() => {
+    const byDate = new Map<
+      string,
+      {
+        heuresPersonnel: number;
+        heuresPersonnelN1: number;
+        heuresTravail: number;
+        heuresTravailN1: number;
+        tauxHoraire: number;
+        tauxHoraireN1: number;
+        osat: number;
+        osatN1: number;
+        gxi: number;
+        gxiN1: number;
+        google: number;
+        googleN1: number;
+        countTauxHoraire: number;
+        countTauxHoraireN1: number;
+        countOsat: number;
+        countOsatN1: number;
+        countGxi: number;
+        countGxiN1: number;
+        countGoogle: number;
+        countGoogleN1: number;
+      }
+    >();
+
+    filteredItems.forEach((item) => {
+      const key = item.report_date;
+      const current = byDate.get(key) ?? {
+        heuresPersonnel: 0,
+        heuresPersonnelN1: 0,
+        heuresTravail: 0,
+        heuresTravailN1: 0,
+        tauxHoraire: 0,
+        tauxHoraireN1: 0,
+        osat: 0,
+        osatN1: 0,
+        gxi: 0,
+        gxiN1: 0,
+        google: 0,
+        googleN1: 0,
+        countTauxHoraire: 0,
+        countTauxHoraireN1: 0,
+        countOsat: 0,
+        countOsatN1: 0,
+        countGxi: 0,
+        countGxiN1: 0,
+        countGoogle: 0,
+        countGoogleN1: 0,
+      };
+      const kpi = item.kpi;
+      if (!kpi) return;
+
+      current.heuresPersonnel += kpi.heures_personnel ?? 0;
+      current.heuresPersonnelN1 += kpi.heures_personnel_n1 ?? 0;
+      current.heuresTravail += kpi.heures_travail ?? 0;
+      current.heuresTravailN1 += kpi.heures_travail_n1 ?? 0;
+
+      if (kpi.taux_horaire !== null && kpi.taux_horaire !== undefined) {
+        current.tauxHoraire += kpi.taux_horaire;
+        current.countTauxHoraire += 1;
+      }
+      if (kpi.taux_horaire_n1 !== null && kpi.taux_horaire_n1 !== undefined) {
+        current.tauxHoraireN1 += kpi.taux_horaire_n1;
+        current.countTauxHoraireN1 += 1;
+      }
+      if (kpi.osat_score !== null && kpi.osat_score !== undefined) {
+        current.osat += kpi.osat_score;
+        current.countOsat += 1;
+      }
+      if (kpi.osat_score_n1 !== null && kpi.osat_score_n1 !== undefined) {
+        current.osatN1 += kpi.osat_score_n1;
+        current.countOsatN1 += 1;
+      }
+      if (kpi.gxi_score !== null && kpi.gxi_score !== undefined) {
+        current.gxi += kpi.gxi_score;
+        current.countGxi += 1;
+      }
+      if (kpi.gxi_score_n1 !== null && kpi.gxi_score_n1 !== undefined) {
+        current.gxiN1 += kpi.gxi_score_n1;
+        current.countGxiN1 += 1;
+      }
+      if (kpi.google_score !== null && kpi.google_score !== undefined) {
+        current.google += kpi.google_score;
+        current.countGoogle += 1;
+      }
+      if (kpi.google_score_n1 !== null && kpi.google_score_n1 !== undefined) {
+        current.googleN1 += kpi.google_score_n1;
+        current.countGoogleN1 += 1;
+      }
+
+      byDate.set(key, current);
+    });
+
+    const byDateComputed = new Map<
+      string,
+      {
+        heuresPersonnel: number | null;
+        heuresPersonnelN1: number | null;
+        heuresTravail: number | null;
+        heuresTravailN1: number | null;
+        tauxHoraire: number | null;
+        tauxHoraireN1: number | null;
+        osat: number | null;
+        osatN1: number | null;
+        gxi: number | null;
+        gxiN1: number | null;
+        google: number | null;
+        googleN1: number | null;
+      }
+    >();
+
+    const monthTotalsRaw = {
+      heuresPersonnel: 0,
+      heuresPersonnelN1: 0,
+      heuresTravail: 0,
+      heuresTravailN1: 0,
+      tauxHoraire: 0,
+      tauxHoraireN1: 0,
+      osat: 0,
+      osatN1: 0,
+      gxi: 0,
+      gxiN1: 0,
+      google: 0,
+      googleN1: 0,
+      countTauxHoraire: 0,
+      countTauxHoraireN1: 0,
+      countOsat: 0,
+      countOsatN1: 0,
+      countGxi: 0,
+      countGxiN1: 0,
+      countGoogle: 0,
+      countGoogleN1: 0,
+    };
+
+    Array.from(byDate.values()).forEach((row) => {
+      monthTotalsRaw.heuresPersonnel += row.heuresPersonnel;
+      monthTotalsRaw.heuresPersonnelN1 += row.heuresPersonnelN1;
+      monthTotalsRaw.heuresTravail += row.heuresTravail;
+      monthTotalsRaw.heuresTravailN1 += row.heuresTravailN1;
+      monthTotalsRaw.tauxHoraire += row.tauxHoraire;
+      monthTotalsRaw.tauxHoraireN1 += row.tauxHoraireN1;
+      monthTotalsRaw.osat += row.osat;
+      monthTotalsRaw.osatN1 += row.osatN1;
+      monthTotalsRaw.gxi += row.gxi;
+      monthTotalsRaw.gxiN1 += row.gxiN1;
+      monthTotalsRaw.google += row.google;
+      monthTotalsRaw.googleN1 += row.googleN1;
+      monthTotalsRaw.countTauxHoraire += row.countTauxHoraire;
+      monthTotalsRaw.countTauxHoraireN1 += row.countTauxHoraireN1;
+      monthTotalsRaw.countOsat += row.countOsat;
+      monthTotalsRaw.countOsatN1 += row.countOsatN1;
+      monthTotalsRaw.countGxi += row.countGxi;
+      monthTotalsRaw.countGxiN1 += row.countGxiN1;
+      monthTotalsRaw.countGoogle += row.countGoogle;
+      monthTotalsRaw.countGoogleN1 += row.countGoogleN1;
+    });
+
+    byDate.forEach((row, date) => {
+      byDateComputed.set(date, {
+        heuresPersonnel: row.heuresPersonnel || null,
+        heuresPersonnelN1: row.heuresPersonnelN1 || null,
+        heuresTravail: row.heuresTravail || null,
+        heuresTravailN1: row.heuresTravailN1 || null,
+        tauxHoraire: row.countTauxHoraire > 0 ? row.tauxHoraire / row.countTauxHoraire : null,
+        tauxHoraireN1:
+          row.countTauxHoraireN1 > 0 ? row.tauxHoraireN1 / row.countTauxHoraireN1 : null,
+        osat: row.countOsat > 0 ? row.osat / row.countOsat : null,
+        osatN1: row.countOsatN1 > 0 ? row.osatN1 / row.countOsatN1 : null,
+        gxi: row.countGxi > 0 ? row.gxi / row.countGxi : null,
+        gxiN1: row.countGxiN1 > 0 ? row.gxiN1 / row.countGxiN1 : null,
+        google: row.countGoogle > 0 ? row.google / row.countGoogle : null,
+        googleN1: row.countGoogleN1 > 0 ? row.googleN1 / row.countGoogleN1 : null,
+      });
+    });
+
+    const monthTotals = {
+      heuresPersonnel: monthTotalsRaw.heuresPersonnel || null,
+      heuresPersonnelN1: monthTotalsRaw.heuresPersonnelN1 || null,
+      heuresTravail: monthTotalsRaw.heuresTravail || null,
+      heuresTravailN1: monthTotalsRaw.heuresTravailN1 || null,
+      tauxHoraire:
+        monthTotalsRaw.countTauxHoraire > 0
+          ? monthTotalsRaw.tauxHoraire / monthTotalsRaw.countTauxHoraire
+          : null,
+      tauxHoraireN1:
+        monthTotalsRaw.countTauxHoraireN1 > 0
+          ? monthTotalsRaw.tauxHoraireN1 / monthTotalsRaw.countTauxHoraireN1
+          : null,
+      osat: monthTotalsRaw.countOsat > 0 ? monthTotalsRaw.osat / monthTotalsRaw.countOsat : null,
+      osatN1:
+        monthTotalsRaw.countOsatN1 > 0 ? monthTotalsRaw.osatN1 / monthTotalsRaw.countOsatN1 : null,
+      gxi: monthTotalsRaw.countGxi > 0 ? monthTotalsRaw.gxi / monthTotalsRaw.countGxi : null,
+      gxiN1:
+        monthTotalsRaw.countGxiN1 > 0 ? monthTotalsRaw.gxiN1 / monthTotalsRaw.countGxiN1 : null,
+      google:
+        monthTotalsRaw.countGoogle > 0 ? monthTotalsRaw.google / monthTotalsRaw.countGoogle : null,
+      googleN1:
+        monthTotalsRaw.countGoogleN1 > 0
+          ? monthTotalsRaw.googleN1 / monthTotalsRaw.countGoogleN1
+          : null,
+    };
+
+    return { byDate: byDateComputed, monthTotals };
+  }, [filteredItems]);
 
   return (
     <Card>
@@ -647,12 +865,24 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                 <TableHead className={`text-right ${colCncClass}`}>% CA CNC</TableHead>
                 <TableHead className="text-right">Écart caisse</TableHead>
                 <TableHead className="text-right">Écart caisse % CA</TableHead>
+                <TableHead className="text-right">Heures personnel</TableHead>
+                <TableHead className="text-right">Heures personnel N-1</TableHead>
+                <TableHead className="text-right">Heures formation</TableHead>
+                <TableHead className="text-right">Heures formation N-1</TableHead>
+                <TableHead className="text-right">Taux horaire (EUR)</TableHead>
+                <TableHead className="text-right">Taux horaire N-1 (EUR)</TableHead>
+                <TableHead className="text-right">OSAT (%)</TableHead>
+                <TableHead className="text-right">OSAT N-1 (%)</TableHead>
+                <TableHead className="text-right">GXI</TableHead>
+                <TableHead className="text-right">GXI N-1</TableHead>
+                <TableHead className="text-right">Google</TableHead>
+                <TableHead className="text-right">Google N-1</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {dayRows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={38} className="text-sm text-muted-foreground">
+                  <TableCell colSpan={50} className="text-sm text-muted-foreground">
                     Aucun rapport pour ce mois.
                   </TableCell>
                 </TableRow>
@@ -737,11 +967,24 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                         <TableCell className={`text-right font-medium ${colCncClass}`}>{formatPercent(calc.pct_ca_cnc)}</TableCell>
                         <TableCell className="text-right font-medium">{formatMoney(row.cash_diff)}</TableCell>
                         <TableCell className="text-right font-medium">{formatPercent(calc.cash_diff_pct_ca)}</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
+                        <TableCell className="text-right font-medium">—</TableCell>
                       </TableRow>
                     );
                   }
 
                   const isToday = row.date === todayIso;
+                  const workforce = workforceStats.byDate.get(row.date);
                   return (
                     <TableRow key={row.date} className={isToday ? "bg-primary/5 ring-2 ring-primary/30 ring-inset" : undefined}>
                       <TableCell className="capitalize">{row.weekday}</TableCell>
@@ -830,6 +1073,18 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                       <TableCell className={`text-right ${colCncClass}`}>{formatPercent(calc.pct_ca_cnc)}</TableCell>
                       <TableCell className="text-right">{formatMoney(row.cash_diff)}</TableCell>
                       <TableCell className="text-right">{formatPercent(calc.cash_diff_pct_ca)}</TableCell>
+                      <TableCell className="text-right">{formatInt(workforce?.heuresPersonnel ?? null)}</TableCell>
+                      <TableCell className="text-right">{formatInt(workforce?.heuresPersonnelN1 ?? null)}</TableCell>
+                      <TableCell className="text-right">{formatInt(workforce?.heuresTravail ?? null)}</TableCell>
+                      <TableCell className="text-right">{formatInt(workforce?.heuresTravailN1 ?? null)}</TableCell>
+                      <TableCell className="text-right">{formatMoney(workforce?.tauxHoraire ?? null)}</TableCell>
+                      <TableCell className="text-right">{formatMoney(workforce?.tauxHoraireN1 ?? null)}</TableCell>
+                      <TableCell className="text-right">{formatPercent(workforce?.osat !== null && workforce?.osat !== undefined ? workforce.osat / 100 : null)}</TableCell>
+                      <TableCell className="text-right">{formatPercent(workforce?.osatN1 !== null && workforce?.osatN1 !== undefined ? workforce.osatN1 / 100 : null)}</TableCell>
+                      <TableCell className="text-right">{formatInt(workforce?.gxi ?? null)}</TableCell>
+                      <TableCell className="text-right">{formatInt(workforce?.gxiN1 ?? null)}</TableCell>
+                      <TableCell className="text-right">{formatInt(workforce?.google ?? null)}</TableCell>
+                      <TableCell className="text-right">{formatInt(workforce?.googleN1 ?? null)}</TableCell>
                     </TableRow>
                   );
                 })
@@ -932,6 +1187,18 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                         <TableCell className={`text-right font-semibold ${colCncClass}`}>{formatPercent(calc.pct_ca_cnc)}</TableCell>
                         <TableCell className="text-right font-semibold">{formatMoney(monthTotals.cash_diff)}</TableCell>
                         <TableCell className="text-right font-semibold">{formatPercent(calc.cash_diff_pct_ca)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatInt(workforceStats.monthTotals.heuresPersonnel)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatInt(workforceStats.monthTotals.heuresPersonnelN1)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatInt(workforceStats.monthTotals.heuresTravail)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatInt(workforceStats.monthTotals.heuresTravailN1)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatMoney(workforceStats.monthTotals.tauxHoraire)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatMoney(workforceStats.monthTotals.tauxHoraireN1)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatPercent(workforceStats.monthTotals.osat !== null ? workforceStats.monthTotals.osat / 100 : null)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatPercent(workforceStats.monthTotals.osatN1 !== null ? workforceStats.monthTotals.osatN1 / 100 : null)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatInt(workforceStats.monthTotals.gxi)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatInt(workforceStats.monthTotals.gxiN1)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatInt(workforceStats.monthTotals.google)}</TableCell>
+                        <TableCell className="text-right font-semibold">{formatInt(workforceStats.monthTotals.googleN1)}</TableCell>
                       </>
                     );
                   })()}

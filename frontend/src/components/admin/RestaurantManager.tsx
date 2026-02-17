@@ -2,25 +2,11 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  createRestaurant,
-  listRestaurants,
-  type RestaurantDto,
-  type RestaurantZone,
-} from "@/lib/restaurants";
-
-const ZONE_OPTIONS: RestaurantZone[] = [
-  "NON_DEFINIE",
-  "ZONE_EST",
-  "ZONE_OUEST",
-  "ZONE_SUD",
-  "ZONE_NORD",
-];
+import { createRestaurant, listRestaurants, type RestaurantDto } from "@/lib/restaurants";
 
 export function RestaurantManager() {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-  const [zone, setZone] = useState<RestaurantZone>("NON_DEFINIE");
   const [msg, setMsg] = useState<string | null>(null);
   const [restaurants, setRestaurants] = useState<RestaurantDto[]>([]);
   const [page, setPage] = useState(1);
@@ -34,7 +20,7 @@ export function RestaurantManager() {
       setRestaurants(data);
       setPage(1);
     } catch (e: any) {
-      setMsg(`❌ ${e?.message ?? "Erreur"}`);
+      setMsg(`Erreur: ${e?.message ?? "Erreur"}`);
     }
   }
 
@@ -47,18 +33,17 @@ export function RestaurantManager() {
     const c = code.trim().toUpperCase();
     const n = name.trim();
     if (!c || !n) {
-      setMsg("❌ Code et nom requis.");
+      setMsg("Code et nom requis.");
       return;
     }
     try {
-      await createRestaurant({ code: c, name: n, zone });
-      setMsg("✅ Restaurant créé.");
+      await createRestaurant({ code: c, name: n });
+      setMsg("Restaurant cree.");
       setCode("");
       setName("");
-      setZone("NON_DEFINIE");
       await loadRestaurants();
     } catch (e: any) {
-      setMsg(`❌ ${e?.message ?? "Erreur"}`);
+      setMsg(`Erreur: ${e?.message ?? "Erreur"}`);
     }
   }
 
@@ -71,7 +56,7 @@ export function RestaurantManager() {
         {restaurants.length === 0 && (
           <div className="text-xs text-muted-foreground">Aucun restaurant pour l'instant.</div>
         )}
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3">
           <div>
             <div className="mb-1 text-xs text-muted-foreground">Code</div>
             <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder="TLS-SO" />
@@ -84,22 +69,8 @@ export function RestaurantManager() {
               placeholder="Toulouse Saint Orens"
             />
           </div>
-          <div>
-            <div className="mb-1 text-xs text-muted-foreground">Zone</div>
-            <select
-              className="h-10 w-full rounded-md border bg-background px-3 py-2 text-sm"
-              value={zone}
-              onChange={(e) => setZone(e.target.value as RestaurantZone)}
-            >
-              {ZONE_OPTIONS.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </div>
           <div className="flex items-end gap-2">
-            <Button onClick={create}>Créer</Button>
+            <Button onClick={create}>Creer</Button>
           </div>
         </div>
 
@@ -107,7 +78,7 @@ export function RestaurantManager() {
 
         {restaurants.length > 0 && (
           <div className="text-xs text-muted-foreground">
-            Existants: {pageItems.map((r) => `${r.code} (${r.name}, ${r.zone})`).join(", ")}
+            Existants: {pageItems.map((r) => `${r.code} (${r.name})`).join(", ")}
           </div>
         )}
 

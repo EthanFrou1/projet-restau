@@ -11,10 +11,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { BKReport } from "@/components/bk/types";
 import type { ReimportRequest } from "@/components/bk/uploader/types";
 
-type Restaurant = { id: number; code: string; name: string };
+type Restaurant = { id: number; code: string; name: string; can_import?: boolean };
 type ReportListItem = {
   id: number;
   restaurant_code: string;
@@ -72,19 +71,18 @@ export function BkReportBrowser({
   const [items, setItems] = useState<ReportListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [, setSelectedReport] = useState<BKReport | null>(null);
-  const [selectedLoading, setSelectedLoading] = useState(false);
 
   const canSelectRestaurant = restaurants.length > 1;
   const fixedRestaurantCode = restaurants.length === 1 ? restaurants[0].code : "";
   const finalRestaurantCode = (restaurantCode || fixedRestaurantCode).trim().toUpperCase();
+  const reimportableCodes = useMemo(
+    () => new Set(restaurants.filter((r) => r.can_import).map((r) => r.code)),
+    [restaurants]
+  );
 
   async function loadReports() {
     setLoading(true);
     setErr(null);
-    setSelectedId(null);
-    setSelectedReport(null);
     try {
       const params = new URLSearchParams();
       if (startDate) params.set("start_date", startDate);
@@ -99,21 +97,6 @@ export function BkReportBrowser({
       setErr(typeof msg === "string" && msg ? msg : "Erreur chargement rapports");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function loadReportDetails(reportId: number) {
-    setSelectedLoading(true);
-    setSelectedId(reportId);
-    setSelectedReport(null);
-    try {
-      const data = await apiFetch<BKReport>(`/reports/bk/${reportId}`);
-      setSelectedReport(data);
-    } catch (e: unknown) {
-      const msg = e && typeof e === "object" && "message" in e ? (e as { message?: unknown }).message : null;
-      setErr(typeof msg === "string" && msg ? msg : "Erreur chargement rapport");
-    } finally {
-      setSelectedLoading(false);
     }
   }
 
@@ -213,15 +196,9 @@ export function BkReportBrowser({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button
-                          variant={selectedId === item.id ? "secondary" : "outline"}
-                          size="sm"
-                          onClick={() => loadReportDetails(item.id)}
-                        >
-                          {selectedId === item.id && selectedLoading ? "Chargement..." : "Voir"}
-                        </Button>
-                        {canReimport && (
+                        {canReimport && reimportableCodes.has(item.restaurant_code) ? (
                           <Button
+                            variant="outline"
                             size="sm"
                             onClick={() =>
                               onReimportRequest?.({
@@ -233,6 +210,8 @@ export function BkReportBrowser({
                           >
                             Réimporter
                           </Button>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Lecture seule</span>
                         )}
                       </div>
                     </TableCell>

@@ -4,7 +4,6 @@ export type Restaurant = {
   id: number;
   code: string;
   name: string;
-  zone: RestaurantZone;
 };
 
 export type MonthlyItem = {
@@ -21,6 +20,12 @@ export type MonthlyItem = {
     clients_n1: number | null;
     ca_delivery: number | null;
     ca_click_collect: number | null;
+    heures_personnel: number | null;
+    heures_travail: number | null;
+    taux_horaire: number | null;
+    osat_score: number | null;
+    gxi_score: number | null;
+    google_score: number | null;
   } | null;
 };
 
@@ -36,6 +41,12 @@ export type ZoneRestaurantStats = {
   clientsN1: number;
   caDelivery: number;
   caClickCollect: number;
+  heuresPersonnel: number;
+  heuresTravail: number;
+  tauxHoraire: number | null;
+  osat: number | null;
+  gxi: number | null;
+  google: number | null;
 };
 
 export type DirectionEntity = {
@@ -49,5 +60,11 @@ export type DirectionEntity = {
   clientsN1: number;
   caDelivery: number;
   caClickCollect: number;
+  heuresPersonnel: number;
+  heuresTravail: number;
+  tauxHoraire: number | null;
+  osat: number | null;
+  gxi: number | null;
+  google: number | null;
   restaurants?: ZoneRestaurantStats[];
 };

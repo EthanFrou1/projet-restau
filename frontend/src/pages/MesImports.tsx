@@ -1,29 +1,28 @@
 import { TabsContent } from "@/components/ui/tabs";
 import { BkReportUploader } from "@/components/bk/BkReportUploader";
-import { BkReportView } from "@/components/bk/BkReportView";
 import type { BKReport } from "@/components/bk/types";
 import type { ReimportRequest } from "@/components/bk/uploader/types";
 
-type Restaurant = { id: number; code: string; name: string };
+type Restaurant = { id: number; code: string; name: string; can_import?: boolean };
 
 type Props = {
   visible: boolean;
   restaurants: Restaurant[];
   canReplaceImport: boolean;
+  showDebugHead?: boolean;
   pendingReimport: ReimportRequest | null;
   onPendingReimportHandled: () => void;
   onUploaded: (report: BKReport) => void;
-  report: BKReport | null;
 };
 
 export function ImportsPage({
   visible,
   restaurants,
   canReplaceImport,
+  showDebugHead = false,
   pendingReimport,
   onPendingReimportHandled,
   onUploaded,
-  report,
 }: Props) {
   if (!visible) return null;
 
@@ -32,12 +31,11 @@ export function ImportsPage({
       <BkReportUploader
         restaurants={restaurants}
         canReplace={canReplaceImport}
+        showDebugHead={showDebugHead}
         pendingReimport={pendingReimport}
         onPendingReimportHandled={onPendingReimportHandled}
         onUploaded={onUploaded}
       />
-
-      <BkReportView report={report} />
     </TabsContent>
   );
 }

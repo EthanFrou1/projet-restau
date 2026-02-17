@@ -1,6 +1,8 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { ImportModal } from "@/components/bk/uploader/ImportModal";
+import { ImportConfirmModal } from "@/components/bk/uploader/ImportConfirmModal";
+import { ImportDebugHeadCard } from "@/components/bk/uploader/ImportDebugHeadCard";
 import { OverdueImportsCard } from "@/components/bk/uploader/OverdueImportsCard";
 import { QuickStatsCard } from "@/components/bk/uploader/QuickStatsCard";
 import { TodayImportsCard } from "@/components/bk/uploader/TodayImportsCard";
@@ -30,6 +32,7 @@ type Props = {
   restaurants: Restaurant[];
   onUploaded: (report: BKReport) => void;
   canReplace?: boolean;
+  showDebugHead?: boolean;
   pendingReimport?: ReimportRequest | null;
   onPendingReimportHandled?: () => void;
 };
@@ -38,6 +41,7 @@ export function BkReportUploader({
   restaurants,
   onUploaded,
   canReplace = false,
+  showDebugHead = false,
   pendingReimport = null,
   onPendingReimportHandled,
 }: Props) {
@@ -49,6 +53,35 @@ export function BkReportUploader({
   const [yearlyMissingLoading, setYearlyMissingLoading] = useState(false);
   const [overdueGroups, setOverdueGroups] = useState<OverdueGroup[]>([]);
   const [overdueLoading, setOverdueLoading] = useState(false);
+  const [debugRows, setDebugRows] = useState<
+    Array<{
+      id: number;
+      restaurant_code: string;
+      report_date: string;
+      created_at: string;
+      comment?: string | null;
+      is_reimport?: boolean | null;
+      imported_by?: {
+        id: number;
+        email: string;
+        first_name?: string | null;
+        last_name?: string | null;
+      } | null;
+    }>
+  >([]);
+  const [debugLoading, setDebugLoading] = useState(false);
+  const [debugError, setDebugError] = useState<string | null>(null);
+  const [debugRefreshTick, setDebugRefreshTick] = useState(0);
+  const [debugStartDate, setDebugStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return toIsoDate(d);
+  });
+  const [debugEndDate, setDebugEndDate] = useState(today);
+  const [debugRestaurantCode, setDebugRestaurantCode] = useState("");
+  const [selectedDebugReport, setSelectedDebugReport] = useState<BKReport | null>(null);
+  const [selectedDebugId, setSelectedDebugId] = useState<number | null>(null);
+  const [selectedDebugLoading, setSelectedDebugLoading] = useState(false);
 
   const [uploadMsg, setUploadMsg] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -60,7 +93,21 @@ export function BkReportUploader({
   const [modalDate, setModalDate] = useState(today);
   const [replaceMode, setReplaceMode] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const [commentDraft, setCommentDraft] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const defaultCommentDraft = "";
+  const defaultExtraKpiDraft = useMemo(
+    () => ({
+      heuresPersonnel: "",
+      heuresTravail: "",
+      tauxHoraire: "18,60",
+      osat: "",
+      gxi: "",
+      google: "",
+    }),
+    []
+  );
+  const [commentN1, setCommentN1] = useState<string | null>(null);
+  const [commentN1Loading, setCommentN1Loading] = useState(false);
   const [files, setFiles] = useState(emptyFiles());
   const [fileErrors, setFileErrors] = useState(emptyFileErrors());
 
@@ -71,15 +118,6 @@ export function BkReportUploader({
   const progressPercent = Math.round((fileCount / totalSteps) * 100);
   const allFilesSelected = fileCount === totalSteps;
 
-  const todayRows = useMemo<TodayRow[]>(() => {
-    return restaurants
-      .map((restaurant) => {
-        const report = reportsByCode[restaurant.code];
-        return { restaurant, report, isDone: Boolean(report) };
-      })
-      .sort((a, b) => a.restaurant.code.localeCompare(b.restaurant.code));
-  }, [reportsByCode, restaurants]);
-
   const overdueRows = useMemo<OverdueRow[]>(() => {
     const flat = overdueGroups.flatMap((group) =>
       group.restaurants.map((restaurant) => ({ date: group.date, restaurant }))
@@ -89,12 +127,23 @@ export function BkReportUploader({
     );
   }, [newestFirst, overdueGroups]);
 
-  const doneCount = todayRows.filter((r) => r.isDone).length;
-  const pendingCount = todayRows.filter((r) => !r.isDone).length;
-
   const selectedRestaurant = selectedCode
     ? restaurants.find((r) => r.code === selectedCode) ?? null
     : null;
+  const actionableRestaurants = useMemo(
+    () => restaurants.filter((restaurant) => restaurant.can_import),
+    [restaurants]
+  );
+  const todayRows = useMemo<TodayRow[]>(() => {
+    return actionableRestaurants
+      .map((restaurant) => {
+        const report = reportsByCode[restaurant.code];
+        return { restaurant, report, isDone: Boolean(report) };
+      })
+      .sort((a, b) => a.restaurant.code.localeCompare(b.restaurant.code));
+  }, [actionableRestaurants, reportsByCode]);
+  const actionableDoneCount = todayRows.filter((r) => r.isDone).length;
+  const actionablePendingCount = todayRows.filter((r) => !r.isDone).length;
 
   // Fetch today's report map to drive the "imports à faire aujourd'hui" table.
   const loadTodayStatus = useCallback(async () => {
@@ -122,7 +171,7 @@ export function BkReportUploader({
 
   // Compute yearly missing count and the per-day overdue list in one pass.
   const loadYearlyAndOverdue = useCallback(async () => {
-    if (restaurants.length === 0) {
+    if (restaurants.length === 0 || actionableRestaurants.length === 0) {
       setYearlyMissing(0);
       setOverdueGroups([]);
       return;
@@ -135,8 +184,8 @@ export function BkReportUploader({
       const params = new URLSearchParams({ start_date: yearStart, end_date: today });
       const data = await apiFetch<ReportListItem[]>(`/reports/bk?${params.toString()}`);
 
-      const assigned = new Set(restaurants.map((r) => r.code));
-      const restaurantByCode = new Map(restaurants.map((r) => [r.code, r]));
+      const assigned = new Set(actionableRestaurants.map((r) => r.code));
+      const restaurantByCode = new Map(actionableRestaurants.map((r) => [r.code, r]));
       const importedByDay = new Set<string>();
       data.forEach((row) => {
         if (assigned.has(row.restaurant_code)) {
@@ -144,14 +193,14 @@ export function BkReportUploader({
         }
       });
 
-      const expectedImports = diffDaysInclusive(yearStart, today) * restaurants.length;
+      const expectedImports = diffDaysInclusive(yearStart, today) * actionableRestaurants.length;
       setYearlyMissing(Math.max(0, expectedImports - importedByDay.size));
 
       const dates = listDatesInclusive(yearStart, previousIsoDate(today));
       const groups: OverdueGroup[] = [];
       dates.forEach((date) => {
         const missingRestaurants: Restaurant[] = [];
-        restaurants.forEach((r) => {
+        actionableRestaurants.forEach((r) => {
           if (!importedByDay.has(`${date}|${r.code}`)) {
             const full = restaurantByCode.get(r.code);
             if (full) missingRestaurants.push(full);
@@ -170,12 +219,82 @@ export function BkReportUploader({
       setYearlyMissingLoading(false);
       setOverdueLoading(false);
     }
-  }, [restaurants, today]);
+  }, [actionableRestaurants, restaurants.length, today]);
 
   useEffect(() => {
     loadTodayStatus();
     loadYearlyAndOverdue();
   }, [loadTodayStatus, loadYearlyAndOverdue]);
+
+  useEffect(() => {
+    if (!showDebugHead) {
+      setDebugRows([]);
+      setDebugLoading(false);
+      setDebugError(null);
+      setSelectedDebugId(null);
+      setSelectedDebugReport(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setDebugLoading(true);
+      setDebugError(null);
+      try {
+        const params = new URLSearchParams({
+          start_date: debugStartDate,
+          end_date: debugEndDate,
+        });
+        if (debugRestaurantCode) params.set("restaurant_code", debugRestaurantCode);
+        const rows = await apiFetch<
+          Array<{
+            id: number;
+            restaurant_code: string;
+            report_date: string;
+            created_at: string;
+            comment?: string | null;
+            is_reimport?: boolean | null;
+            imported_by?: {
+              id: number;
+              email: string;
+              first_name?: string | null;
+              last_name?: string | null;
+            } | null;
+          }>
+        >(`/reports/bk?${params.toString()}`);
+        if (cancelled) return;
+        const sorted = [...rows]
+          .sort((a, b) => b.created_at.localeCompare(a.created_at))
+          .slice(0, 20);
+        setDebugRows(sorted);
+        setSelectedDebugId(null);
+        setSelectedDebugReport(null);
+      } catch (error: unknown) {
+        if (cancelled) return;
+        setDebugError(getErrorMessage(error, "Erreur chargement tete des imports"));
+        setDebugRows([]);
+      } finally {
+        if (!cancelled) setDebugLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [showDebugHead, debugRefreshTick, debugStartDate, debugEndDate, debugRestaurantCode]);
+
+  async function loadDebugReport(reportId: number) {
+    setSelectedDebugLoading(true);
+    setSelectedDebugId(reportId);
+    setSelectedDebugReport(null);
+    try {
+      const data = await apiFetch<BKReport>(`/reports/bk/${reportId}`);
+      setSelectedDebugReport(data);
+    } catch (error: unknown) {
+      setDebugError(getErrorMessage(error, "Erreur chargement detail import"));
+      setSelectedDebugReport(null);
+    } finally {
+      setSelectedDebugLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!pendingReimport) return;
@@ -195,11 +314,15 @@ export function BkReportUploader({
     dateValue = today,
     reportId: number | null = null
   ) {
+    const restaurant = restaurants.find((r) => r.code === code);
+    if (!restaurant?.can_import) {
+      setUploadMsg("Action non autorisée pour ce restaurant.");
+      return;
+    }
     setSelectedCode(code);
     setSelectedReportId(reportId);
     setModalDate(dateValue);
     setReplaceMode(forceReplace);
-    setCommentDraft("");
     setFiles(emptyFiles());
     setFileErrors(emptyFileErrors());
     setUploadMsg(null);
@@ -209,11 +332,11 @@ export function BkReportUploader({
   function closeModal() {
     if (uploading) return;
     setModalOpen(false);
+    setConfirmOpen(false);
     setSelectedCode(null);
     setSelectedReportId(null);
     setModalDate(today);
     setReplaceMode(false);
-    setCommentDraft("");
     setFiles(emptyFiles());
     setFileErrors(emptyFileErrors());
   }
@@ -240,7 +363,84 @@ export function BkReportUploader({
     setFileErrors((prev) => ({ ...prev, [spec.id]: null }));
   }
 
-  async function submitImport() {
+  function handleFolderSelected(list: FileList | null) {
+    if (!list || list.length === 0) return;
+
+    const nextFiles = emptyFiles();
+    const nextErrors = emptyFileErrors();
+
+    for (const file of Array.from(list)) {
+      const spec = FILE_SPECS.find((candidate) => isExpectedFileName(file.name, candidate.label));
+      if (!spec) continue;
+      if (nextFiles[spec.id]) continue;
+      nextFiles[spec.id] = file;
+    }
+
+    setFiles(nextFiles);
+    setFileErrors(nextErrors);
+    setUploadMsg(null);
+  }
+
+  function resetSelectedFiles() {
+    setFiles(emptyFiles());
+    setFileErrors(emptyFileErrors());
+  }
+
+  useEffect(() => {
+    if (!modalOpen || !selectedCode || !modalDate) {
+      setCommentN1(null);
+      setCommentN1Loading(false);
+      return;
+    }
+
+    const [yearStr, monthStr, dayStr] = modalDate.split("-");
+    const year = Number(yearStr);
+    const month = Number(monthStr);
+    const day = Number(dayStr);
+    if (!year || !month || !day) {
+      setCommentN1(null);
+      return;
+    }
+
+    const prevDate = new Date(Date.UTC(year - 1, month - 1, day));
+    const isValidSameDay =
+      prevDate.getUTCFullYear() === year - 1 &&
+      prevDate.getUTCMonth() === month - 1 &&
+      prevDate.getUTCDate() === day;
+
+    if (!isValidSameDay) {
+      setCommentN1(null);
+      setCommentN1Loading(false);
+      return;
+    }
+
+    const prevIso = prevDate.toISOString().slice(0, 10);
+    let cancelled = false;
+
+    (async () => {
+      setCommentN1Loading(true);
+      try {
+        const params = new URLSearchParams({
+          start_date: prevIso,
+          end_date: prevIso,
+          restaurant_code: selectedCode,
+        });
+        const rows = await apiFetch<Array<{ comment?: string | null }>>(`/reports/bk?${params.toString()}`);
+        if (cancelled) return;
+        setCommentN1(rows[0]?.comment?.trim() || null);
+      } catch {
+        if (!cancelled) setCommentN1(null);
+      } finally {
+        if (!cancelled) setCommentN1Loading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [modalDate, modalOpen, selectedCode]);
+
+  function requestImportConfirmation() {
     if (!selectedCode || !allFilesSelected || modalDate > today) {
       setUploadMsg("Date invalide ou fichiers incomplets.");
       return;
@@ -255,9 +455,24 @@ export function BkReportUploader({
       setUploadMsg("Réimport impossible: import existant introuvable.");
       return;
     }
+    setUploadMsg(null);
+    setConfirmOpen(true);
+  }
+
+  async function submitImport(payload: {
+    commentDraft: string;
+    extraKpiDraft: {
+      heuresPersonnel: string;
+      heuresTravail: string;
+      tauxHoraire: string;
+      osat: string;
+      gxi: string;
+      google: string;
+    };
+  }) {
+    if (!selectedCode) return;
 
     setUploading(true);
-    setUploadMsg(null);
     try {
       if (replaceMode && selectedReportId) {
         await apiFetch<{ status: string }>(`/reports/bk/${selectedReportId}`, { method: "DELETE" });
@@ -266,7 +481,13 @@ export function BkReportUploader({
       const fd = new FormData();
       fd.append("report_date", modalDate);
       fd.append("restaurant_code", selectedCode);
-      if (commentDraft.trim()) fd.append("comment", commentDraft.trim());
+      if (payload.commentDraft.trim()) fd.append("comment", payload.commentDraft.trim());
+      if (payload.extraKpiDraft.heuresPersonnel.trim()) fd.append("heures_personnel", payload.extraKpiDraft.heuresPersonnel.trim());
+      if (payload.extraKpiDraft.heuresTravail.trim()) fd.append("heures_travail", payload.extraKpiDraft.heuresTravail.trim());
+      if (payload.extraKpiDraft.tauxHoraire.trim()) fd.append("taux_horaire", payload.extraKpiDraft.tauxHoraire.trim());
+      if (payload.extraKpiDraft.osat.trim()) fd.append("osat_score", payload.extraKpiDraft.osat.trim());
+      if (payload.extraKpiDraft.gxi.trim()) fd.append("gxi_score", payload.extraKpiDraft.gxi.trim());
+      if (payload.extraKpiDraft.google.trim()) fd.append("google_score", payload.extraKpiDraft.google.trim());
       if (replaceMode && selectedReportId) fd.append("is_reimport", "true");
 
       for (const spec of FILE_SPECS) {
@@ -284,7 +505,9 @@ export function BkReportUploader({
       onUploaded(data);
       await loadTodayStatus();
       await loadYearlyAndOverdue();
+      setDebugRefreshTick((tick) => tick + 1);
       setUploadMsg(replaceMode ? "Réimport terminé." : "Import terminé.");
+      setConfirmOpen(false);
       closeModal();
     } catch (error: unknown) {
       setUploadMsg(getErrorMessage(error, "Erreur import CSV"));
@@ -296,9 +519,9 @@ export function BkReportUploader({
   return (
     <>
       <QuickStatsCard
-        restaurants={restaurants}
-        doneCount={doneCount}
-        pendingCount={pendingCount}
+        assignedCount={actionableRestaurants.length}
+        doneCount={actionableDoneCount}
+        pendingCount={actionablePendingCount}
         yearlyMissing={yearlyMissing}
         yearlyMissingLoading={yearlyMissingLoading}
       />
@@ -322,8 +545,27 @@ export function BkReportUploader({
 
       {uploadMsg && <div className="text-sm whitespace-pre-wrap">{uploadMsg}</div>}
 
+      {showDebugHead && (
+        <ImportDebugHeadCard
+          restaurants={restaurants}
+          rows={debugRows}
+          loading={debugLoading}
+          error={debugError}
+          startDate={debugStartDate}
+          endDate={debugEndDate}
+          restaurantCode={debugRestaurantCode}
+          onStartDateChange={setDebugStartDate}
+          onEndDateChange={setDebugEndDate}
+          onRestaurantCodeChange={setDebugRestaurantCode}
+          onView={loadDebugReport}
+          selectedReport={selectedDebugReport}
+          selectedId={selectedDebugId}
+          selectedLoading={selectedDebugLoading}
+        />
+      )}
+
       <ImportModal
-        open={modalOpen}
+        open={modalOpen && !confirmOpen}
         selectedRestaurant={selectedRestaurant}
         modalDate={modalDate}
         replaceMode={replaceMode}
@@ -334,11 +576,25 @@ export function BkReportUploader({
         files={files}
         fileErrors={fileErrors}
         fileSpecs={FILE_SPECS}
-        commentDraft={commentDraft}
+        onFolderSelect={handleFolderSelected}
+        onResetFiles={resetSelectedFiles}
         onClose={closeModal}
-        onSubmit={submitImport}
-        onCommentChange={setCommentDraft}
+        onSubmit={requestImportConfirmation}
         onFileSelect={handleFileSelected}
+      />
+
+      <ImportConfirmModal
+        open={confirmOpen}
+        uploading={uploading}
+        commentN1={commentN1}
+        commentN1Loading={commentN1Loading}
+        initialCommentDraft={defaultCommentDraft}
+        initialExtraKpiDraft={defaultExtraKpiDraft}
+        onCancel={() => {
+          if (uploading) return;
+          setConfirmOpen(false);
+        }}
+        onConfirm={submitImport}
       />
     </>
   );

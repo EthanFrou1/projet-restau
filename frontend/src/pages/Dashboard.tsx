@@ -1,6 +1,6 @@
 import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
 
-type DashScope = "year" | "month" | "day";
+type DashScope = "year" | "month" | "week" | "day";
 type Restaurant = { id: number; code: string; name: string };
 type DailyStatus = {
   loading: boolean;
@@ -17,10 +17,25 @@ type Totals = {
   mp: number;
   mpN1: number;
   caDelivery: number;
+  caDeliveryN1: number;
   caCnc: number;
+  caCncN1: number;
   caMagasin: number;
+  caMagasinN1: number;
+  marge: number;
+  margeN1: number;
+  pertesMontant: number;
+  pertesMontantN1: number;
+  tauxPertes: number;
+  tauxPertesN1: number;
 };
-type Trend = { labels: string[]; n: number[]; n1: number[] };
+type Trend = {
+  labels: string[];
+  n: number[];
+  n1: number[];
+  commentsN?: Array<string | null>;
+  commentsN1?: Array<string | null>;
+};
 type TrendPoint = { x: number; y: number; value: number };
 type TrendChart = {
   chartWidth: number;
@@ -37,6 +52,7 @@ type TrendChart = {
   n1Line: string;
 };
 type HoveredTrend = {
+  idx: number;
   label: string;
   n: number;
   n1: number;
@@ -44,28 +60,41 @@ type HoveredTrend = {
   n1Point: TrendPoint;
 } | null;
 type ChannelRow = { label: string; value: number; share: number };
+type ChannelTrendSeries = {
+  key: "magasin" | "delivery" | "cnc";
+  label: string;
+  color: string;
+  n: number[];
+  n1: number[];
+};
+type ChannelTrend = {
+  labels: string[];
+  series: ChannelTrendSeries[];
+  commentsN?: Array<string | null>;
+  commentsN1?: Array<string | null>;
+};
 type StoreQuickViewRow = { code: string; name: string; ca: number; caN1: number; clients: number };
+type WorkforceQuickMetrics = {
+  heuresPersonnel: number;
+  heuresPersonnelN1: number | null;
+  heuresTravail: number;
+  heuresTravailN1: number | null;
+  tauxHoraire: number | null;
+  tauxHoraireN1: number | null;
+  osat: number | null;
+  osatN1: number | null;
+  gxi: number | null;
+  gxiN1: number | null;
+  google: number | null;
+  googleN1: number | null;
+};
 
 type Props = {
   canSeeDailyBanner: boolean;
   dailyStatus: DailyStatus;
   onImportNow: () => void;
   dashScope: DashScope;
-  setDashScope: (value: DashScope) => void;
-  yearOptions: number[];
-  dashYear: string;
-  setDashYear: (value: string) => void;
-  dashMonth: string;
-  setDashMonth: (value: string) => void;
-  dashDayFrom: string;
-  setDashDayFrom: (value: string) => void;
-  dashDayTo: string;
-  setDashDayTo: (value: string) => void;
-  dayOptions: string[];
-  dayToOptions: string[];
-  restaurants: Restaurant[];
-  dashRestaurant: string;
-  setDashRestaurant: (value: string) => void;
+  dashWeek: string;
   dashErr: string | null;
   dashLoading: boolean;
   filtersSummary: string;
@@ -84,10 +113,13 @@ type Props = {
   setHoveredTrendIndex: (value: number | null) => void;
   dashTrend: Trend;
   channelBreakdown: ChannelRow[];
+  channelBreakdownN1: ChannelRow[];
+  channelTrend: ChannelTrend;
   channelMax: number;
   salesTrend: Trend;
   basketTrend: Trend;
   storeQuickView: StoreQuickViewRow[];
+  workforceQuickMetrics: WorkforceQuickMetrics;
 };
 
 export function OverviewPage(props: Props) {

@@ -10,7 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { TodayRow } from "@/components/bk/uploader/types";
-import { formatTime } from "@/components/bk/uploader/utils";
+import { formatDateTimeFr } from "@/components/bk/uploader/utils";
 
 type Props = {
   rows: TodayRow[];
@@ -60,7 +60,7 @@ export function TodayImportsCard({
                       {row.isDone ? (
                         <div className="inline-flex items-center gap-2 text-emerald-700">
                           <CheckCircle2 className="h-4 w-4" />
-                          <span className="text-xs">Importé à {formatTime(row.report!.created_at)}</span>
+                          <span className="text-xs">Importé le {formatDateTimeFr(row.report!.created_at)}</span>
                         </div>
                       ) : (
                         <div className="inline-flex items-center gap-2 text-amber-700">
@@ -70,12 +70,12 @@ export function TodayImportsCard({
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      {!row.isDone && (
+                      {!row.isDone && row.restaurant.can_import && (
                         <Button size="sm" onClick={() => onImport(row.restaurant.code)}>
                           Importer
                         </Button>
                       )}
-                      {row.isDone && canReplace && (
+                      {row.isDone && canReplace && row.restaurant.can_import && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -84,7 +84,10 @@ export function TodayImportsCard({
                           Réimporter
                         </Button>
                       )}
-                      {row.isDone && !canReplace && (
+                      {!row.restaurant.can_import && (
+                        <span className="text-xs text-muted-foreground">Lecture seule</span>
+                      )}
+                      {row.isDone && !canReplace && row.restaurant.can_import && (
                         <span className="text-xs text-muted-foreground">Déjà importé</span>
                       )}
                     </TableCell>

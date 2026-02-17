@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -10,9 +10,15 @@ from app.core.audit import write_audit_log
 from app.core.errors import auth_error
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+PASSWORD_CHANGE_ALLOWED_PATHS = {
+    "/auth/me",
+    "/auth/logout",
+    "/auth/change-password-first-login",
+}
 
 
 def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: Session = Depends(get_db),
 ):
@@ -23,7 +29,7 @@ def get_current_user(
             raise ValueError("Missing sub")
         user_id = int(sub)
     except Exception:
-        # Token invalide / expiré
+        # Token invalide / expire
         write_audit_log(
             db,
             action="auth.token.invalid",
@@ -32,7 +38,7 @@ def get_current_user(
         )
         auth_error(
             "AUTH_INVALID_TOKEN",
-            "Token invalide ou expiré",
+            "Token invalide ou expire",
         )
 
     user = get_user_by_id(db, user_id)
@@ -45,7 +51,20 @@ def get_current_user(
         )
         auth_error(
             "AUTH_USER_NOT_FOUND",
-            "Utilisateur non trouvé",
+            "Utilisateur non trouve",
+        )
+
+    if user.must_change_password and request.url.path not in PASSWORD_CHANGE_ALLOWED_PATHS:
+        write_audit_log(
+            db,
+            action="auth.password_change.required",
+            actor_email=user.email,
+            target=f"path:{request.url.path}",
+        )
+        auth_error(
+            "AUTH_PASSWORD_CHANGE_REQUIRED",
+            "Vous devez changer votre mot de passe temporaire avant de continuer",
+            status_code=403,
         )
 
     return user

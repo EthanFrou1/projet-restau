@@ -2,13 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, EmailStr, Field
 from typing import List
 from sqlalchemy.orm import Session, joinedload
+import secrets
+import string
 
 from app.api.deps import get_db
 from app.api.auth_deps import require_roles
 from app.core.roles import Role
 from app.core.security import hash_password
+from app.core.email import send_temporary_password_email
 from app.models.user import User
-from app.models.restaurant import Restaurant, RestaurantZone
+from app.models.restaurant import Restaurant
 from app.core.audit import write_audit_log
 from app.core.utils import normalize_email
 
@@ -16,33 +19,47 @@ router = APIRouter(prefix="/debug", tags=["debug"])
 
 class CreateUserRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=8)
+    password: str | None = Field(default=None, min_length=8)
     role: Role
     first_name: str | None = None
     last_name: str | None = None
 
-@router.post("/create-user")
+
+class CreateUserResponse(BaseModel):
+    id: int
+    email: str
+    role: str
+    first_name: str | None = None
+    last_name: str | None = None
+    must_change_password: bool
+    email_sent: bool
+    email_error: str | None = None
+
+
+@router.post("/create-user", response_model=CreateUserResponse)
 def create_user(
     payload: CreateUserRequest,
     db: Session = Depends(get_db),
     _user=Depends(require_roles([Role.DEV, Role.ADMIN])),
 ): 
     if _user.role == Role.ADMIN.value and payload.role not in (Role.MANAGER, Role.READONLY):
-        raise HTTPException(status_code=403, detail="Admin can only create MANAGER or READONLY users")
+        raise HTTPException(status_code=403, detail="Un admin peut uniquement créer des utilisateurs MANAGER ou READONLY")
 
     email = normalize_email(payload.email)
 
     existing = db.query(User).filter(User.email == email).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Email already exists")
+        raise HTTPException(status_code=400, detail="Cet email existe déjà")
 
     first_name = payload.first_name.strip() if payload.first_name else None
     last_name = payload.last_name.strip() if payload.last_name else None
+    temp_password = payload.password or _generate_temporary_password()
 
     user = User(
         email=email,
-        hashed_password=hash_password(payload.password),
+        hashed_password=hash_password(temp_password),
         is_active=True,
+        must_change_password=True,
         role=payload.role.value,
         first_name=first_name or None,
         last_name=last_name or None,
@@ -57,6 +74,25 @@ def create_user(
         actor_email=_user.email,
         target=f"user:{user.id} email={user.email} role={user.role}",
     )
+    email_sent, email_error = send_temporary_password_email(
+        to_email=user.email,
+        temp_password=temp_password,
+        created_by_email=_user.email,
+    )
+    if email_sent:
+        write_audit_log(
+            db=db,
+            action="debug.user.create.mail.sent",
+            actor_email=_user.email,
+            target=f"user:{user.id}",
+        )
+    else:
+        write_audit_log(
+            db=db,
+            action="debug.user.create.mail.failed",
+            actor_email=_user.email,
+            target=f"user:{user.id} error:{email_error or 'unknown'}",
+        )
 
     return {
         "id": user.id,
@@ -64,7 +100,22 @@ def create_user(
         "role": user.role,
         "first_name": user.first_name,
         "last_name": user.last_name,
+        "must_change_password": bool(user.must_change_password),
+        "email_sent": email_sent,
+        "email_error": email_error,
     }
+
+
+def _generate_temporary_password(length: int = 14) -> str:
+    upper = secrets.choice(string.ascii_uppercase)
+    lower = secrets.choice(string.ascii_lowercase)
+    digit = secrets.choice(string.digits)
+    special = secrets.choice("!@#$%^&*()_+-=")
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*()_+-="
+    remaining = [secrets.choice(alphabet) for _ in range(max(0, length - 4))]
+    chars = [upper, lower, digit, special, *remaining]
+    secrets.SystemRandom().shuffle(chars)
+    return "".join(chars)
 
 class UserOut(BaseModel):
     id: int
@@ -78,7 +129,6 @@ class RestaurantOut(BaseModel):
     id: int
     code: str
     name: str
-    zone: RestaurantZone
 
 class UserWithRestaurantsOut(BaseModel):
     id: int
@@ -92,7 +142,6 @@ class UserWithRestaurantsOut(BaseModel):
 class RestaurantCreateIn(BaseModel):
     code: str = Field(min_length=2)
     name: str = Field(min_length=2)
-    zone: RestaurantZone = RestaurantZone.NON_DEFINIE
 
 class UserRestaurantsIn(BaseModel):
     restaurant_codes: list[str] = Field(default_factory=list)
@@ -164,7 +213,7 @@ def list_users_with_restaurants(
             first_name=u.first_name,
             last_name=u.last_name,
             restaurants=[
-                RestaurantOut(id=r.id, code=r.code, name=r.name, zone=r.zone)
+                RestaurantOut(id=r.id, code=r.code, name=r.name)
                 for r in ([x for x in u.restaurants if x.code in admin_codes] if _user.role == Role.ADMIN.value else u.restaurants)
             ],
         )
@@ -178,11 +227,11 @@ def list_restaurants(
 ):
     if _user.role == Role.ADMIN.value:
         return [
-            RestaurantOut(id=r.id, code=r.code, name=r.name, zone=r.zone)
+            RestaurantOut(id=r.id, code=r.code, name=r.name)
             for r in sorted(_user.restaurants, key=lambda x: x.code)
         ]
     rows = db.query(Restaurant).order_by(Restaurant.code.asc()).all()
-    return [RestaurantOut(id=r.id, code=r.code, name=r.name, zone=r.zone) for r in rows]
+    return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in rows]
 
 @router.post("/restaurants", response_model=RestaurantOut)
 def create_restaurant(
@@ -195,11 +244,11 @@ def create_restaurant(
     existing = db.query(Restaurant).filter(Restaurant.code == code).first()
     if existing:
         raise HTTPException(status_code=400, detail="Restaurant code already exists")
-    restaurant = Restaurant(code=code, name=name, zone=payload.zone)
+    restaurant = Restaurant(code=code, name=name)
     db.add(restaurant)
     db.commit()
     db.refresh(restaurant)
-    return RestaurantOut(id=restaurant.id, code=restaurant.code, name=restaurant.name, zone=restaurant.zone)
+    return RestaurantOut(id=restaurant.id, code=restaurant.code, name=restaurant.name)
 
 @router.put("/users/{user_id}/restaurants", response_model=List[RestaurantOut])
 def set_user_restaurants(
@@ -240,13 +289,13 @@ def set_user_restaurants(
         user.restaurants = outside_scope_restaurants + scoped_restaurants
         db.commit()
         db.refresh(user)
-        return [RestaurantOut(id=r.id, code=r.code, name=r.name, zone=r.zone) for r in scoped_restaurants]
+        return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in scoped_restaurants]
 
     user.restaurants = restaurants
     db.commit()
     db.refresh(user)
 
-    return [RestaurantOut(id=r.id, code=r.code, name=r.name, zone=r.zone) for r in user.restaurants]
+    return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in user.restaurants]
 
 @router.delete("/users/{user_id}")
 def delete_user(

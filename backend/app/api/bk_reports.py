@@ -38,6 +38,12 @@ class BKDailyKpiUpdate(BaseModel):
     cnc_n1: Decimal | None = None
     client_n1: int | None = None
     cash_diff: Decimal | None = None
+    heures_personnel: Decimal | None = None
+    heures_travail: Decimal | None = None
+    taux_horaire: Decimal | None = None
+    osat_score: Decimal | None = None
+    gxi_score: Decimal | None = None
+    google_score: Decimal | None = None
 
 
 def _decode_csv_bytes(raw: bytes) -> str:
@@ -89,6 +95,12 @@ def upload_bk_report(
     report_date: date = Form(...),
     restaurant_code: str = Form(...),
     comment: str | None = Form(None),
+    heures_personnel: str | None = Form(None),
+    heures_travail: str | None = Form(None),
+    taux_horaire: str | None = Form(None),
+    osat_score: str | None = Form(None),
+    gxi_score: str | None = Form(None),
+    google_score: str | None = Form(None),
     is_reimport: bool = Form(False),
     caparprofit: UploadFile = File(...),
     consommationparprofit: UploadFile = File(...),
@@ -101,13 +113,21 @@ def upload_bk_report(
     db: Session = Depends(get_db),
     _user=Depends(require_roles([Role.MANAGER, Role.ADMIN, Role.DEV])),
 ):
+    allowed_codes = {r.code for r in _user.restaurants}
+    normalized_code = restaurant_code.strip().upper()
+    if normalized_code not in allowed_codes:
+        raise HTTPException(
+            status_code=403,
+            detail="Not allowed for this restaurant",
+        )
+
     if report_date > date.today():
         raise HTTPException(status_code=400, detail="Report date cannot be in the future.")
 
     existing = (
         db.query(BKDailyReport)
         .filter(
-            BKDailyReport.restaurant_code == restaurant_code,
+            BKDailyReport.restaurant_code == normalized_code,
             BKDailyReport.report_date == report_date,
         )
         .first()
@@ -120,7 +140,7 @@ def upload_bk_report(
 
     report = BKDailyReport(
         client_code="BK",
-        restaurant_code=restaurant_code.strip().upper(),
+        restaurant_code=normalized_code,
         report_date=report_date,
         comment=comment.strip() if comment else None,
         imported_by_user_id=getattr(_user, "id", None),
@@ -227,17 +247,16 @@ def upload_bk_report(
         [r["tac"] for r in channel_rows if _is_group(r["channel_label"], "CLICK & COLLECT")]
     )
 
-    db.add(
-        BKDailyKpi(
-            report_id=report.id,
-            ca_real=ca_real,
-            clients=clients,
-            ca_delivery=ca_delivery,
-            client_delivery=client_delivery,
-            ca_click_collect=ca_click_collect,
-            client_click_collect=client_click_collect,
-        )
+    kpi_row = BKDailyKpi(
+        report_id=report.id,
+        ca_real=ca_real,
+        clients=clients,
+        ca_delivery=ca_delivery,
+        client_delivery=client_delivery,
+        ca_click_collect=ca_click_collect,
+        client_click_collect=client_click_collect,
     )
+    db.add(kpi_row)
 
     # consommation par profit (1 ligne)
     rows = _read_csv_rows(consommationparprofit)
@@ -353,6 +372,17 @@ def upload_bk_report(
             )
         )
 
+    extra_kpi_values = {
+        "heures_personnel": _parse_decimal(heures_personnel),
+        "heures_travail": _parse_decimal(heures_travail),
+        "taux_horaire": _parse_decimal(taux_horaire),
+        "osat_score": _parse_decimal(osat_score),
+        "gxi_score": _parse_decimal(gxi_score),
+        "google_score": _parse_decimal(google_score),
+    }
+    for key, value in extra_kpi_values.items():
+        setattr(kpi_row, key, value)
+
     db.commit()
 
     return {"report_id": report.id}
@@ -378,7 +408,7 @@ def list_bk_reports(
             BKDailyReport.restaurant_code == restaurant_code.strip().upper()
         )
 
-    if user.role not in (Role.ADMIN.value, Role.DEV.value):
+    if user.role == Role.READONLY.value:
         allowed = [r.code for r in user.restaurants]
         if not allowed:
             return []
@@ -427,14 +457,18 @@ def list_bk_reports_monthly(
     end_date = date(year, month, last_day)
 
     allowed_restaurants: list[str] | None = None
-    if user.role not in (Role.ADMIN.value, Role.DEV.value):
+    if user.role == Role.READONLY.value:
         allowed_restaurants = [r.code for r in user.restaurants]
         if not allowed_restaurants:
             return []
 
     query = (
         db.query(BKDailyReport)
-        .options(joinedload(BKDailyReport.channel_sales), joinedload(BKDailyReport.kpi))
+        .options(
+            joinedload(BKDailyReport.channel_sales),
+            joinedload(BKDailyReport.kpi),
+            joinedload(BKDailyReport.divers),
+        )
         .filter(
             BKDailyReport.report_date >= start_date,
             BKDailyReport.report_date <= end_date,
@@ -472,6 +506,9 @@ def list_bk_reports_monthly(
         ca_ttc_total = sum(
             _safe_float(r.ca_ttc) for r in report.channel_sales if not r.is_total
         )
+        marge_total = sum(
+            _safe_float(r.net_total_profit) for r in report.channel_sales if not r.is_total
+        )
         tac_total = sum((r.tac or 0) for r in report.channel_sales if not r.is_total)
         ca_delivery = sum(
             _safe_float(r.ca_net)
@@ -493,15 +530,19 @@ def list_bk_reports_monthly(
             for r in report.channel_sales
             if not r.is_total and _is_group(r.channel_label, "CLICK & COLLECT")
         )
+        divers_row = report.divers[0] if report.divers else None
+        pertes_montant = _safe_float(divers_row.montant_annulations) if divers_row else 0.0
 
         return {
             "ca_net_total": ca_net_total,
             "ca_ttc_total": ca_ttc_total,
+            "marge_total": marge_total,
             "tac_total": tac_total,
             "ca_delivery": ca_delivery,
             "client_delivery": client_delivery,
             "ca_click_collect": ca_click_collect,
             "client_click_collect": client_click_collect,
+            "pertes_montant": pertes_montant,
         }
 
     prev_by_key: dict[tuple[str, date], BKDailyReport] = {}
@@ -513,7 +554,11 @@ def list_bk_reports_monthly(
 
         prev_query = (
             db.query(BKDailyReport)
-            .options(joinedload(BKDailyReport.channel_sales), joinedload(BKDailyReport.kpi))
+            .options(
+                joinedload(BKDailyReport.channel_sales),
+                joinedload(BKDailyReport.kpi),
+                joinedload(BKDailyReport.divers),
+            )
             .filter(
                 BKDailyReport.report_date >= prev_start,
                 BKDailyReport.report_date <= prev_end,
@@ -540,10 +585,13 @@ def list_bk_reports_monthly(
         values = _calc_report_values(report)
         ca_net_total = values["ca_net_total"]
         ca_ttc_total = values["ca_ttc_total"]
+        marge_total = values["marge_total"]
+        pertes_montant = values["pertes_montant"]
         tac_total = values["tac_total"]
 
         kpi = report.kpi
         ca_real = kpi.ca_real if kpi and kpi.ca_real is not None else ca_net_total
+        ca_real_float = _safe_float(ca_real)
         clients = kpi.clients if kpi and kpi.clients is not None else tac_total
 
         prev_date = None
@@ -557,17 +605,27 @@ def list_bk_reports_monthly(
         prev_kpi = prev_report.kpi if prev_report else None
 
         prev_ca_real = None
+        prev_ca_real_float = 0.0
         prev_clients = None
         prev_ca_delivery = None
         prev_client_delivery = None
         prev_ca_click_collect = None
         prev_client_click_collect = None
+        prev_heures_personnel = None
+        prev_heures_travail = None
+        prev_taux_horaire = None
+        prev_osat_score = None
+        prev_gxi_score = None
+        prev_google_score = None
+        prev_marge_total = None
+        prev_pertes_montant = None
         if prev_report:
             prev_ca_real = (
                 prev_kpi.ca_real
                 if prev_kpi and prev_kpi.ca_real is not None
                 else prev_values["ca_net_total"]
             )
+            prev_ca_real_float = _safe_float(prev_ca_real)
             prev_clients = (
                 prev_kpi.clients
                 if prev_kpi and prev_kpi.clients is not None
@@ -593,6 +651,14 @@ def list_bk_reports_monthly(
                 if prev_kpi and prev_kpi.client_click_collect is not None
                 else prev_values["client_click_collect"]
             )
+            prev_heures_personnel = prev_kpi.heures_personnel if prev_kpi else None
+            prev_heures_travail = prev_kpi.heures_travail if prev_kpi else None
+            prev_taux_horaire = prev_kpi.taux_horaire if prev_kpi else None
+            prev_osat_score = prev_kpi.osat_score if prev_kpi else None
+            prev_gxi_score = prev_kpi.gxi_score if prev_kpi else None
+            prev_google_score = prev_kpi.google_score if prev_kpi else None
+            prev_marge_total = prev_values["marge_total"]
+            prev_pertes_montant = prev_values["pertes_montant"]
 
         payload.append(
             {
@@ -604,6 +670,16 @@ def list_bk_reports_monthly(
                 "comment_n1": prev_report.comment if prev_report else None,
                 "ca_net_total": ca_net_total,
                 "ca_ttc_total": ca_ttc_total,
+                "marge": marge_total,
+                "taux_pertes": (pertes_montant / ca_real_float) if ca_real_float else 0.0,
+                "pertes_montant": pertes_montant,
+                "marge_n1": prev_marge_total,
+                "taux_pertes_n1": (
+                    (prev_pertes_montant / prev_ca_real_float)
+                    if prev_pertes_montant is not None and prev_ca_real_float
+                    else None
+                ),
+                "pertes_montant_n1": prev_pertes_montant,
                 "tac_total": tac_total,
                 "kpi": {
                     "n1_ht": kpi.n1_ht if kpi and kpi.n1_ht is not None else prev_ca_real,
@@ -621,6 +697,18 @@ def list_bk_reports_monthly(
                     "client_click_collect": kpi.client_click_collect if kpi and kpi.client_click_collect is not None else values["client_click_collect"],
                     "client_n1": kpi.client_n1 if kpi and kpi.client_n1 is not None else prev_client_click_collect,
                     "cash_diff": kpi.cash_diff if kpi else None,
+                    "heures_personnel": kpi.heures_personnel if kpi else None,
+                    "heures_personnel_n1": prev_heures_personnel,
+                    "heures_travail": kpi.heures_travail if kpi else None,
+                    "heures_travail_n1": prev_heures_travail,
+                    "taux_horaire": kpi.taux_horaire if kpi else None,
+                    "taux_horaire_n1": prev_taux_horaire,
+                    "osat_score": kpi.osat_score if kpi else None,
+                    "osat_score_n1": prev_osat_score,
+                    "gxi_score": kpi.gxi_score if kpi else None,
+                    "gxi_score_n1": prev_gxi_score,
+                    "google_score": kpi.google_score if kpi else None,
+                    "google_score_n1": prev_google_score,
                 },
             }
         )
@@ -637,6 +725,11 @@ def get_bk_report(
     report = db.query(BKDailyReport).filter(BKDailyReport.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
+
+    if _user.role == Role.READONLY.value:
+        allowed = {r.code for r in _user.restaurants}
+        if report.restaurant_code not in allowed:
+            raise HTTPException(status_code=403, detail="Not allowed for this restaurant")
 
     prev_comment = None
     try:
@@ -681,6 +774,12 @@ def get_bk_report(
             "client_click_collect": report.kpi.client_click_collect,
             "client_n1": report.kpi.client_n1,
             "cash_diff": report.kpi.cash_diff,
+            "heures_personnel": report.kpi.heures_personnel,
+            "heures_travail": report.kpi.heures_travail,
+            "taux_horaire": report.kpi.taux_horaire,
+            "osat_score": report.kpi.osat_score,
+            "gxi_score": report.kpi.gxi_score,
+            "google_score": report.kpi.google_score,
         },
         "channel_sales": [
             {
@@ -766,6 +865,10 @@ def update_bk_report_kpi(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
+    allowed_codes = {r.code for r in _user.restaurants}
+    if report.restaurant_code not in allowed_codes:
+        raise HTTPException(status_code=403, detail="Not allowed for this restaurant")
+
     if report.kpi is None:
         report.kpi = BKDailyKpi(report_id=report.id)
 
@@ -778,6 +881,12 @@ def update_bk_report_kpi(
     report.kpi.cnc_n1 = payload.cnc_n1
     report.kpi.client_n1 = payload.client_n1
     report.kpi.cash_diff = payload.cash_diff
+    report.kpi.heures_personnel = payload.heures_personnel
+    report.kpi.heures_travail = payload.heures_travail
+    report.kpi.taux_horaire = payload.taux_horaire
+    report.kpi.osat_score = payload.osat_score
+    report.kpi.gxi_score = payload.gxi_score
+    report.kpi.google_score = payload.google_score
 
     db.add(report)
     db.commit()
@@ -795,10 +904,9 @@ def delete_bk_report(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
 
-    if user.role == Role.MANAGER.value:
-        allowed = {r.code for r in user.restaurants}
-        if report.restaurant_code not in allowed:
-            raise HTTPException(status_code=403, detail="Not allowed for this restaurant")
+    allowed = {r.code for r in user.restaurants}
+    if report.restaurant_code not in allowed:
+        raise HTTPException(status_code=403, detail="Not allowed for this restaurant")
 
     db.delete(report)
     db.commit()

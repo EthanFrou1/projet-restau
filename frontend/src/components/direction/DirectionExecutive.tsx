@@ -6,14 +6,7 @@ import { DirectionFilters } from "@/components/direction/DirectionFilters";
 import { DirectionSummary } from "@/components/direction/DirectionSummary";
 import { exportDirectionPdf } from "@/components/direction/exportPdf";
 import { computeBestByMetric } from "@/components/direction/metrics";
-import type {
-  DirectionEntity,
-  DirectionViewMode,
-  MonthlyItem,
-  Restaurant,
-  RestaurantZone,
-  ZoneRestaurantStats,
-} from "@/components/direction/types";
+import type { DirectionEntity, MonthlyItem, Restaurant } from "@/components/direction/types";
 
 type Props = {
   restaurants: Restaurant[];
@@ -29,8 +22,6 @@ const pctFmt = new Intl.NumberFormat("fr-FR", {
 
 export function DirectionExecutive({ restaurants }: Props) {
   const [year, setYear] = useState(String(new Date().getFullYear()));
-  const [viewMode, setViewMode] = useState<DirectionViewMode>("zone");
-  const [selectedZone, setSelectedZone] = useState<"ALL" | RestaurantZone>("ALL");
   const [selectedRestaurant, setSelectedRestaurant] = useState<"ALL" | string>("ALL");
   const [items, setItems] = useState<MonthlyItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,12 +54,6 @@ export function DirectionExecutive({ restaurants }: Props) {
     loadYear();
   }, [year]);
 
-  useEffect(() => {
-    if (viewMode === "zone" && selectedRestaurant !== "ALL") {
-      setSelectedRestaurant("ALL");
-    }
-  }, [viewMode, selectedRestaurant]);
-
   const restaurantByCode = useMemo(
     () => new Map(restaurants.map((restaurant) => [restaurant.code, restaurant])),
     [restaurants]
@@ -78,31 +63,30 @@ export function DirectionExecutive({ restaurants }: Props) {
     return items.filter((item) => {
       const restaurant = restaurantByCode.get(item.restaurant_code);
       if (!restaurant) return false;
-      if (selectedZone !== "ALL" && restaurant.zone !== selectedZone) return false;
-      if (
-        viewMode === "restaurant" &&
-        selectedRestaurant !== "ALL" &&
-        item.restaurant_code !== selectedRestaurant
-      ) {
-        return false;
-      }
+      if (selectedRestaurant !== "ALL" && item.restaurant_code !== selectedRestaurant) return false;
       return true;
     });
-  }, [items, restaurantByCode, selectedRestaurant, selectedZone, viewMode]);
+  }, [items, restaurantByCode, selectedRestaurant]);
 
   const entities = useMemo<DirectionEntity[]>(() => {
-    const map = new Map<string, DirectionEntity>();
-    const zoneRestaurants = new Map<string, Map<string, ZoneRestaurantStats>>();
+    const map = new Map<
+      string,
+      DirectionEntity & {
+        tauxHoraireCount: number;
+        osatCount: number;
+        gxiCount: number;
+        googleCount: number;
+      }
+    >();
 
     for (const item of filteredItems) {
       const restaurant = restaurantByCode.get(item.restaurant_code);
       if (!restaurant) continue;
-      const key = viewMode === "zone" ? restaurant.zone : restaurant.code;
-      const label = viewMode === "zone" ? restaurant.zone : `${restaurant.code} - ${restaurant.name}`;
+
+      const key = restaurant.code;
       const current = map.get(key) ?? {
         key,
-        label,
-        zone: restaurant.zone,
+        label: `${restaurant.code} - ${restaurant.name}`,
         ca: 0,
         n1: 0,
         prev: 0,
@@ -110,6 +94,16 @@ export function DirectionExecutive({ restaurants }: Props) {
         clientsN1: 0,
         caDelivery: 0,
         caClickCollect: 0,
+        heuresPersonnel: 0,
+        heuresTravail: 0,
+        tauxHoraire: null,
+        osat: null,
+        gxi: null,
+        google: null,
+        tauxHoraireCount: 0,
+        osatCount: 0,
+        gxiCount: 0,
+        googleCount: 0,
       };
 
       const kpi = item.kpi;
@@ -120,47 +114,42 @@ export function DirectionExecutive({ restaurants }: Props) {
       current.clientsN1 += kpi?.clients_n1 ?? 0;
       current.caDelivery += kpi?.ca_delivery ?? 0;
       current.caClickCollect += kpi?.ca_click_collect ?? 0;
+      current.heuresPersonnel += kpi?.heures_personnel ?? 0;
+      current.heuresTravail += kpi?.heures_travail ?? 0;
+      if (kpi?.taux_horaire !== null && kpi?.taux_horaire !== undefined) {
+        const prev = current.tauxHoraire ?? 0;
+        current.tauxHoraire = prev + kpi.taux_horaire;
+        current.tauxHoraireCount += 1;
+      }
+      if (kpi?.osat_score !== null && kpi?.osat_score !== undefined) {
+        const prev = current.osat ?? 0;
+        current.osat = prev + kpi.osat_score;
+        current.osatCount += 1;
+      }
+      if (kpi?.gxi_score !== null && kpi?.gxi_score !== undefined) {
+        const prev = current.gxi ?? 0;
+        current.gxi = prev + kpi.gxi_score;
+        current.gxiCount += 1;
+      }
+      if (kpi?.google_score !== null && kpi?.google_score !== undefined) {
+        const prev = current.google ?? 0;
+        current.google = prev + kpi.google_score;
+        current.googleCount += 1;
+      }
 
       map.set(key, current);
-
-      if (viewMode === "zone") {
-        const zoneKey = restaurant.zone;
-        const inZone = zoneRestaurants.get(zoneKey) ?? new Map<string, ZoneRestaurantStats>();
-        const currentRestaurant = inZone.get(restaurant.code) ?? {
-          code: restaurant.code,
-          name: restaurant.name,
-          ca: 0,
-          n1: 0,
-          prev: 0,
-          clients: 0,
-          clientsN1: 0,
-          caDelivery: 0,
-          caClickCollect: 0,
-        };
-        currentRestaurant.ca += kpi?.ca_real ?? item.ca_net_total ?? 0;
-        currentRestaurant.n1 += kpi?.n1_ht ?? 0;
-        currentRestaurant.prev += kpi?.prev_ht ?? 0;
-        currentRestaurant.clients += kpi?.clients ?? item.tac_total ?? 0;
-        currentRestaurant.clientsN1 += kpi?.clients_n1 ?? 0;
-        currentRestaurant.caDelivery += kpi?.ca_delivery ?? 0;
-        currentRestaurant.caClickCollect += kpi?.ca_click_collect ?? 0;
-        inZone.set(restaurant.code, currentRestaurant);
-        zoneRestaurants.set(zoneKey, inZone);
-      }
     }
 
-    const rows = Array.from(map.values()).sort((a, b) => b.ca - a.ca);
-    if (viewMode !== "zone") return rows;
-
-    return rows.map((entity) => {
-      const restaurantsInZone = zoneRestaurants.get(entity.key);
-      if (!restaurantsInZone) return entity;
-      return {
-        ...entity,
-        restaurants: Array.from(restaurantsInZone.values()).sort((a, b) => b.ca - a.ca),
-      };
-    });
-  }, [filteredItems, restaurantByCode, viewMode]);
+    return Array.from(map.values())
+      .map((entry) => ({
+        ...entry,
+        tauxHoraire: entry.tauxHoraireCount > 0 ? (entry.tauxHoraire ?? 0) / entry.tauxHoraireCount : null,
+        osat: entry.osatCount > 0 ? (entry.osat ?? 0) / entry.osatCount : null,
+        gxi: entry.gxiCount > 0 ? (entry.gxi ?? 0) / entry.gxiCount : null,
+        google: entry.googleCount > 0 ? (entry.google ?? 0) / entry.googleCount : null,
+      }))
+      .sort((a, b) => b.ca - a.ca);
+  }, [filteredItems, restaurantByCode]);
 
   const totals = useMemo(() => {
     return entities.reduce(
@@ -176,72 +165,15 @@ export function DirectionExecutive({ restaurants }: Props) {
 
   const bestByMetric = useMemo(() => computeBestByMetric(entities), [entities]);
 
-  const filteredRestaurants = useMemo(() => {
-    return restaurants.filter((restaurant) => selectedZone === "ALL" || restaurant.zone === selectedZone);
-  }, [restaurants, selectedZone]);
-
-  const exportDatasets = useMemo(() => {
-    if (viewMode === "zone") {
-      const zoneRows = entities;
-      const restaurantRows = entities.flatMap((zone) =>
-        (zone.restaurants ?? []).map((restaurant) => ({
-          key: restaurant.code,
-          label: `${restaurant.code} - ${restaurant.name}`,
-          zone: zone.key as RestaurantZone,
-          ca: restaurant.ca,
-          n1: restaurant.n1,
-          prev: restaurant.prev,
-          clients: restaurant.clients,
-          clientsN1: restaurant.clientsN1,
-          caDelivery: restaurant.caDelivery,
-          caClickCollect: restaurant.caClickCollect,
-        }))
-      );
-      return { zoneRows, restaurantRows };
-    }
-
-    const restaurantRows = entities;
-    const zoneMap = new Map<string, DirectionEntity>();
-    for (const restaurant of restaurantRows) {
-      const zoneKey = restaurant.zone ?? "NON_DEFINIE";
-      const current = zoneMap.get(zoneKey) ?? {
-        key: zoneKey,
-        label: zoneKey,
-        zone: zoneKey as RestaurantZone,
-        ca: 0,
-        n1: 0,
-        prev: 0,
-        clients: 0,
-        clientsN1: 0,
-        caDelivery: 0,
-        caClickCollect: 0,
-      };
-      current.ca += restaurant.ca;
-      current.n1 += restaurant.n1;
-      current.prev += restaurant.prev;
-      current.clients += restaurant.clients;
-      current.clientsN1 += restaurant.clientsN1;
-      current.caDelivery += restaurant.caDelivery;
-      current.caClickCollect += restaurant.caClickCollect;
-      zoneMap.set(zoneKey, current);
-    }
-    const zoneRows = Array.from(zoneMap.values());
-    return { zoneRows, restaurantRows };
-  }, [entities, viewMode]);
-
   return (
     <section className="space-y-4">
       <DirectionFilters
         year={year}
         yearOptions={yearOptions}
         onYearChange={setYear}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        selectedZone={selectedZone}
-        onSelectedZoneChange={setSelectedZone}
         selectedRestaurant={selectedRestaurant}
         onSelectedRestaurantChange={setSelectedRestaurant}
-        restaurants={filteredRestaurants}
+        restaurants={restaurants}
         onExportPdf={() => setExportModalOpen(true)}
       />
 
@@ -266,7 +198,6 @@ export function DirectionExecutive({ restaurants }: Props) {
         <DirectionEntityGrid
           entities={entities}
           bestByMetric={bestByMetric}
-          viewMode={viewMode}
           moneyFmt={moneyFmt}
           intFmt={intFmt}
           pctFmt={pctFmt}
@@ -275,24 +206,17 @@ export function DirectionExecutive({ restaurants }: Props) {
 
       <DirectionExportModal
         open={exportModalOpen}
-        viewMode={viewMode}
-        zoneRows={exportDatasets.zoneRows}
-        restaurantRows={exportDatasets.restaurantRows}
+        restaurantRows={entities}
         onCancel={() => setExportModalOpen(false)}
         onConfirm={(selection) => {
-          const zonesFiltered = exportDatasets.zoneRows.filter((zone) =>
-            selection.zoneKeys.includes(zone.key)
-          );
-          const restaurantsFiltered = exportDatasets.restaurantRows.filter(
-            (restaurant) =>
-              selection.restaurantCodes.includes(restaurant.key) &&
-              (restaurant.zone ? selection.zoneKeys.includes(restaurant.zone) : true)
+          const restaurantsFiltered = entities.filter((restaurant) =>
+            selection.restaurantCodes.includes(restaurant.key)
           );
 
           exportDirectionPdf({
             year,
-            modeLabel: viewMode === "zone" ? "Zones" : "Restaurants",
-            zoneRows: selection.includeZones ? zonesFiltered : [],
+            modeLabel: "Restaurants",
+            zoneRows: [],
             restaurantRows: selection.includeRestaurants ? restaurantsFiltered : [],
             moneyFmt,
             intFmt,

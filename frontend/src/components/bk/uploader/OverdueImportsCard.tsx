@@ -96,9 +96,13 @@ export function OverdueImportsCard({
                               </div>
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button size="sm" onClick={() => onImport(row.restaurant.code, row.date)}>
-                                Importer
-                              </Button>
+                              {row.restaurant.can_import ? (
+                                <Button size="sm" onClick={() => onImport(row.restaurant.code, row.date)}>
+                                  Importer
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Lecture seule</span>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}

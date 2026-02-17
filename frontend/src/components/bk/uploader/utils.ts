@@ -27,6 +27,14 @@ export function formatTime(value: string) {
   return parsed.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
+export function formatDateTimeFr(value: string) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  const day = parsed.toLocaleDateString("fr-FR");
+  const time = parsed.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  return `${day} à ${time}`;
+}
+
 export function formatFrDate(value: string) {
   const parsed = new Date(`${value}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return value;

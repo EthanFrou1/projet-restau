@@ -22,6 +22,12 @@ export type BKReport = {
     client_click_collect: number | null;
     client_n1: number | null;
     cash_diff: string | null;
+    heures_personnel: string | null;
+    heures_travail: string | null;
+    taux_horaire: string | null;
+    osat_score: string | null;
+    gxi_score: string | null;
+    google_score: string | null;
   } | null;
   channel_sales: Array<{
     channel_label: string;

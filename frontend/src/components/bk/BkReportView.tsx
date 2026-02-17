@@ -115,6 +115,34 @@ export function BkReportView({ report }: Props) {
         )}
 
         <div className="space-y-2">
+          <div className="text-sm font-medium">Indicateurs RH et satisfaction</div>
+          <div className="rounded-md border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Heures personnel</TableHead>
+                  <TableHead>Heures formation (coût complémentaire)</TableHead>
+                  <TableHead>Taux horaire (EUR)</TableHead>
+                  <TableHead>OSAT (%)</TableHead>
+                  <TableHead>GXI</TableHead>
+                  <TableHead>Google</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                <TableRow>
+                  <TableCell>{report.kpi?.heures_personnel ?? "—"}</TableCell>
+                  <TableCell>{report.kpi?.heures_travail ?? "—"}</TableCell>
+                  <TableCell>{report.kpi?.taux_horaire ?? "—"}</TableCell>
+                  <TableCell>{report.kpi?.osat_score ?? "—"}</TableCell>
+                  <TableCell>{report.kpi?.gxi_score ?? "—"}</TableCell>
+                  <TableCell>{report.kpi?.google_score ?? "—"}</TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
+        <div className="space-y-2">
           <div className="text-sm font-medium">Canaux (CA par profit)</div>
           <div className="rounded-md border overflow-hidden">
             <Table>

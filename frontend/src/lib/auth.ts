@@ -1,7 +1,11 @@
 import { apiFetch, setAccessToken } from "@/lib/api";
 
 export async function login(email: string, password: string) {
-  const data = await apiFetch<{ access_token: string; expires_at: string }>(
+  const data = await apiFetch<{
+    access_token: string;
+    expires_at: string;
+    must_change_password: boolean;
+  }>(
     "/auth/login",
     {
       method: "POST",
@@ -23,7 +27,7 @@ export async function logout() {
 
 export async function createUser(payload: {
   email: string;
-  password: string;
+  password?: string;
   role: "ADMIN" | "MANAGER" | "READONLY" | "DEV";
   first_name?: string | null;
   last_name?: string | null;
@@ -34,7 +38,21 @@ export async function createUser(payload: {
     role: string;
     first_name?: string | null;
     last_name?: string | null;
+    must_change_password: boolean;
+    email_sent: boolean;
+    email_error?: string | null;
   }>("/debug/create-user", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function changePasswordFirstLogin(payload: {
+  current_password: string;
+  new_password: string;
+  new_password_confirm: string;
+}) {
+  return apiFetch<{ ok: boolean }>("/auth/change-password-first-login", {
     method: "POST",
     body: JSON.stringify(payload),
   });

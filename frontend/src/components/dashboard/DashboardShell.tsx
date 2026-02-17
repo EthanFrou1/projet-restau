@@ -1,14 +1,22 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { BarChart3, Database, LayoutDashboard, Shield } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ChartColumnBig,
+  ChartSpline,
+  Database,
+  LayoutDashboard,
+  Shield,
+  Table2,
+} from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { logout, listUsers, createUser, deleteUser } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
-import type { BKReport } from "@/components/bk/types";
 import { getMyRestaurants, listUsersWithRestaurants, setUserRestaurants } from "@/lib/restaurants";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { StatusDialog } from "@/components/ui/status-dialog";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { ComparisonPage } from "@/pages/Comparaison";
@@ -33,8 +41,16 @@ type MonthlyItem = {
   restaurant_code: string;
   report_date: string;
   created_at: string;
+  comment?: string | null;
+  comment_n1?: string | null;
   ca_net_total: number;
   ca_ttc_total: number;
+  marge?: number;
+  marge_n1?: number;
+  taux_pertes?: number;
+  taux_pertes_n1?: number;
+  pertes_montant?: number;
+  pertes_montant_n1?: number;
   tac_total: number;
   kpi: {
     n1_ht: number | null;
@@ -52,6 +68,18 @@ type MonthlyItem = {
     client_click_collect: number | null;
     client_n1: number | null;
     cash_diff: number | null;
+    heures_personnel: number | null;
+    heures_personnel_n1: number | null;
+    heures_travail: number | null;
+    heures_travail_n1: number | null;
+    taux_horaire: number | null;
+    taux_horaire_n1: number | null;
+    osat_score: number | null;
+    osat_score_n1: number | null;
+    gxi_score: number | null;
+    gxi_score_n1: number | null;
+    google_score: number | null;
+    google_score_n1: number | null;
   } | null;
 };
 
@@ -59,7 +87,7 @@ type Restaurant = {
   id: number;
   code: string;
   name: string;
-  zone: "NON_DEFINIE" | "ZONE_EST" | "ZONE_OUEST" | "ZONE_SUD" | "ZONE_NORD";
+  can_import?: boolean;
 };
 type ReportListItem = {
   id: number;
@@ -76,7 +104,7 @@ type TabValue =
   | "bk-compare"
   | "executive"
   | "dev";
-type DashScope = "year" | "month" | "day";
+type DashScope = "year" | "month" | "week" | "day";
 
 const TAB_TO_PATH: Record<TabValue, string> = {
   overview: "/dashboard",
@@ -118,13 +146,63 @@ function toIsoDate(value: Date) {
   return local.toISOString().slice(0, 10);
 }
 
+function getIsoWeekNumber(value: Date): number {
+  const date = new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
+}
+
+function getIsoWeekStart(year: number, week: number): Date {
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const mondayWeek1 = new Date(jan4);
+  mondayWeek1.setUTCDate(jan4.getUTCDate() - jan4Day + 1);
+  const start = new Date(mondayWeek1);
+  start.setUTCDate(mondayWeek1.getUTCDate() + (week - 1) * 7);
+  return start;
+}
+
+function isoWeeksInYear(year: number): number {
+  return getIsoWeekNumber(new Date(Date.UTC(year, 11, 28)));
+}
+
+function formatIsoDayMonth(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1).toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+}
+
+function formatIsoDayMonthYear(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1).toLocaleDateString("fr-FR");
+}
+
+function normalizeComment(value?: string | null): string | null {
+  const cleaned = (value ?? "").replace(/\s+/g, " ").trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function mergeComment(base?: string | null, incoming?: string | null): string | null {
+  const next = normalizeComment(incoming);
+  if (!next) return normalizeComment(base);
+  const current = normalizeComment(base);
+  if (!current) return next;
+  if (current === next) return current;
+  const parts = current.split(" | ").map((entry) => entry.trim()).filter(Boolean);
+  if (parts.includes(next)) return current;
+  return `${current} | ${next}`;
+}
+
 export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => void }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [report, setReport] = useState<BKReport | null>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [devUsers, setDevUsers] = useState<Array<{
     id: number;
@@ -135,14 +213,21 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     last_name?: string | null;
   }>>([]);
   const [devUsersLoading, setDevUsersLoading] = useState(false);
-  const [devUsersPage, setDevUsersPage] = useState(1);
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newPassword2, setNewPassword2] = useState("");
   const [newRole, setNewRole] = useState<"ADMIN" | "MANAGER" | "READONLY" | "DEV">("READONLY");
-  const [createMsg, setCreateMsg] = useState<string | null>(null);
+  const [createUserDialog, setCreateUserDialog] = useState<{
+    open: boolean;
+    kind: "success" | "error";
+    title: string;
+    description: string;
+  }>({
+    open: false,
+    kind: "success",
+    title: "",
+    description: "",
+  });
   const [confirmDeleteUser, setConfirmDeleteUser] = useState<{ id: number; label: string } | null>(null);
   const [confirmRemoveAssoc, setConfirmRemoveAssoc] = useState<{
     userId: number;
@@ -164,13 +249,16 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   >([]);
   const [assocLoading, setAssocLoading] = useState(false);
   const [assocMsg, setAssocMsg] = useState<string | null>(null);
+  const [assocUsersPage, setAssocUsersPage] = useState(1);
   const [dashYear, setDashYear] = useState(String(new Date().getFullYear()));
   const [dashMonth, setDashMonth] = useState(String(new Date().getMonth() + 1).padStart(2, "0"));
-  const [dashScope, setDashScope] = useState<DashScope>("month");
+  const [dashScope, setDashScope] = useState<DashScope>("week");
+  const [dashWeek, setDashWeek] = useState(String(getIsoWeekNumber(new Date())).padStart(2, "0"));
   const [dashDayFrom, setDashDayFrom] = useState(String(new Date().getDate()).padStart(2, "0"));
   const [dashDayTo, setDashDayTo] = useState(String(new Date().getDate()).padStart(2, "0"));
   const [dashRestaurant, setDashRestaurant] = useState("");
   const [dashItems, setDashItems] = useState<MonthlyItem[]>([]);
+  const [dashRefreshTick, setDashRefreshTick] = useState(0);
   const [dashLoading, setDashLoading] = useState(false);
   const [dashErr, setDashErr] = useState<string | null>(null);
   const [hoveredTrendIndex, setHoveredTrendIndex] = useState<number | null>(null);
@@ -235,18 +323,22 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   const canReplaceImport = me?.role === "MANAGER" || me?.role === "ADMIN" || me?.role === "DEV";
   const containerClass = "mx-auto w-full space-y-6";
   const pageSize = 10;
-  const totalUserPages = Math.max(1, Math.ceil(devUsers.length / pageSize));
-  const usersPageStart = (devUsersPage - 1) * pageSize;
-  const usersPageItems = devUsers.slice(usersPageStart, usersPageStart + pageSize);
+  const totalAssocPages = Math.max(1, Math.ceil(assocUsers.length / pageSize));
+  const assocUsersPageStart = (assocUsersPage - 1) * pageSize;
+  const assocUsersPageItems = assocUsers.slice(assocUsersPageStart, assocUsersPageStart + pageSize);
+
+  useEffect(() => {
+    setAssocUsersPage((prev) => Math.min(prev, totalAssocPages));
+  }, [totalAssocPages]);
   const navItems = useMemo(
     () =>
       [
         { value: "overview", label: "Dashboard", icon: LayoutDashboard },
         canImportData ? { value: "data", label: "Mes imports", icon: Database } : null,
-        canViewGlobalBk ? { value: "bk-global", label: "Historiques des imports", icon: BarChart3 } : null,
-        canViewGlobalBk ? { value: "bk-monthly", label: "BK mensuel", icon: BarChart3 } : null,
-        canViewGlobalBk ? { value: "bk-compare", label: "Comparaison", icon: BarChart3 } : null,
-        canViewGlobalBk ? { value: "executive", label: "Revue Direction", icon: BarChart3 } : null,
+        canViewGlobalBk ? { value: "bk-global", label: "Historiques des imports", icon: ChartSpline } : null,
+        canViewGlobalBk ? { value: "bk-monthly", label: "Tableau de données", icon: Table2 } : null,
+        canViewGlobalBk ? { value: "bk-compare", label: "Comparaison", icon: ArrowLeftRight } : null,
+        canViewGlobalBk ? { value: "executive", label: "Données globales", icon: ChartColumnBig } : null,
         canAccessDev ? { value: "dev", label: "Administration", icon: Shield } : null,
       ].filter(
         (
@@ -265,7 +357,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   );
   const activeTabDescription = useMemo(() => {
     if (activeTab === "overview") {
-      return `${displayName ? `Bonjour ${displayName} ! ` : ""}Ici tu retrouves ton accès et tes données quotidiennes.`;
+      return "";
     }
     if (activeTab === "data") {
       return "Suis les imports à faire aujourd'hui, traite les retards par date, puis valide les CSV restaurant par restaurant.";
@@ -274,13 +366,13 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       return "Retrouve la liste des imports réalisés et relance un réimport si nécessaire.";
     }
     if (activeTab === "bk-monthly") {
-      return "Consulte le récapitulatif mensuel détaillé avec les indicateurs de comparaison.";
+      return "Consulte le tableau de données mensuel détaillé avec les indicateurs de comparaison.";
     }
     if (activeTab === "bk-compare") {
       return "Compare deux périodes pour suivre les écarts de performance par indicateur.";
     }
     if (activeTab === "executive") {
-      return "Vue annuelle synthétique orientée direction avec comparatif zone/restaurant et export PDF.";
+      return "Vue globale de pilotage avec comparatif restaurants et export PDF.";
     }
     if (activeTab === "dev") {
       if (isAdmin) {
@@ -289,14 +381,14 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       return "Administre les utilisateurs, les rôles et les associations restaurants.";
     }
     return "";
-  }, [activeTab, displayName, isAdmin]);
+  }, [activeTab, isAdmin]);
+  const headerFilterSelectClass = "h-10 w-full rounded-md border bg-background px-3 py-2 text-sm";
 
   async function loadDevUsers() {
     setDevUsersLoading(true);
     try {
       const data = await listUsers();
       setDevUsers(data);
-      setDevUsersPage(1);
     } finally {
       setDevUsersLoading(false);
     }
@@ -308,6 +400,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     try {
       const data = await listUsersWithRestaurants();
       setAssocUsers(data);
+      setAssocUsersPage(1);
     } catch (e: any) {
       setAssocMsg(e?.message ?? "Erreur chargement associations");
     } finally {
@@ -377,7 +470,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       setDashLoading(true);
       setDashErr(null);
       try {
-        if (dashScope === "year") {
+        if (dashScope === "year" || dashScope === "week") {
           const months = Array.from({ length: 12 }, (_, i) => i + 1);
           const chunks = await Promise.all(months.map((m) => fetchMonthly(yearNum, m)));
           setDashItems(chunks.flat());
@@ -391,13 +484,14 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         setDashLoading(false);
       }
     })();
-  }, [dashScope, dashYear, dashMonth, dashRestaurant]);
+  }, [dashScope, dashYear, dashMonth, dashRestaurant, dashRefreshTick]);
 
   async function refreshDailyStatus() {
     if (!canImportData) return;
     if (!restaurants) return;
+    const actionableRestaurants = restaurants.filter((restaurant) => restaurant.can_import);
     const today = toIsoDate(new Date());
-    if (restaurants.length === 0) {
+    if (actionableRestaurants.length === 0) {
       setDailyStatus({
         loading: false,
         missing: [],
@@ -416,7 +510,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         `/reports/bk?${params.toString()}`
       );
       const reported = new Set(data.map((r) => r.restaurant_code));
-      const missing = restaurants.filter((r) => !reported.has(r.code));
+      const missing = actionableRestaurants.filter((r) => !reported.has(r.code));
       setDailyStatus({ loading: false, missing, date: today, error: null, noRestaurants: false });
     } catch (e: any) {
       setDailyStatus({
@@ -443,8 +537,29 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       new Date(Number(dashYear), monthIdx, 1)
     );
   }, [dashMonth, dashYear]);
+  const weekOptions = useMemo(() => {
+    const yearNum = Number(dashYear);
+    if (!yearNum) return [];
+    const weeks = isoWeeksInYear(yearNum);
+    return Array.from({ length: weeks }, (_, idx) => String(idx + 1).padStart(2, "0"));
+  }, [dashYear]);
+  const selectedWeekRange = useMemo(() => {
+    const yearNum = Number(dashYear);
+    const weekNum = Number(dashWeek);
+    if (!yearNum || !weekNum) return null;
+    const weekStart = getIsoWeekStart(yearNum, weekNum);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+    const startIso = weekStart.toISOString().slice(0, 10);
+    const endIso = weekEnd.toISOString().slice(0, 10);
+    return { startIso, endIso };
+  }, [dashWeek, dashYear]);
   const periodLabel = useMemo(() => {
     if (dashScope === "year") return `année ${dashYear}`;
+    if (dashScope === "week") {
+      if (!selectedWeekRange) return `semaine ${dashWeek} ${dashYear}`;
+      return `semaine ${dashWeek} • ${formatIsoDayMonthYear(selectedWeekRange.startIso)} - ${formatIsoDayMonthYear(selectedWeekRange.endIso)}`;
+    }
     if (dashScope === "day") {
       const from = Number(dashDayFrom);
       const to = Number(dashDayTo);
@@ -453,7 +568,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       return `${start}/${dashMonth}/${dashYear} - ${end}/${dashMonth}/${dashYear}`;
     }
     return `${monthLabel} ${dashYear}`;
-  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, monthLabel]);
+  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashWeek, dashYear, monthLabel, selectedWeekRange]);
   const filtersSummary = useMemo(() => {
     const selectedRestaurant = restaurants.find((r) => r.code === dashRestaurant);
     const restaurantLabel = selectedRestaurant
@@ -467,6 +582,12 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     if (dashScope === "month") {
       return `Voici les données de ${restaurantLabel} sur ${monthLabel} ${dashYear}.`;
     }
+    if (dashScope === "week") {
+      if (!selectedWeekRange) {
+        return `Voici les données de ${restaurantLabel} sur la semaine ${dashWeek} de ${dashYear}.`;
+      }
+      return `Voici les données de ${restaurantLabel} du ${formatIsoDayMonthYear(selectedWeekRange.startIso)} au ${formatIsoDayMonthYear(selectedWeekRange.endIso)}.`;
+    }
 
     const from = Number(dashDayFrom);
     const to = Number(dashDayTo);
@@ -476,7 +597,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       return `Voici les données de ${restaurantLabel} pour le ${start}/${dashMonth}/${dashYear}.`;
     }
     return `Voici les données de ${restaurantLabel} du ${start}/${dashMonth}/${dashYear} au ${end}/${dashMonth}/${dashYear}.`;
-  }, [dashDayFrom, dashDayTo, dashMonth, dashRestaurant, dashScope, dashYear, monthLabel, restaurants]);
+  }, [dashDayFrom, dashDayTo, dashMonth, dashRestaurant, dashScope, dashWeek, dashYear, monthLabel, restaurants, selectedWeekRange]);
 
   const dayOptions = useMemo(() => {
     const yearNum = Number(dashYear);
@@ -498,6 +619,13 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   }, [dashDayFrom, dashDayTo, dayOptions]);
 
   useEffect(() => {
+    if (weekOptions.length === 0) return;
+    if (!weekOptions.includes(dashWeek)) {
+      setDashWeek(weekOptions[weekOptions.length - 1]);
+    }
+  }, [dashWeek, weekOptions]);
+
+  useEffect(() => {
     const from = Number(dashDayFrom);
     const to = Number(dashDayTo);
     if (!from || !to) return;
@@ -508,6 +636,12 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
 
   const scopedDashItems = useMemo(() => {
     if (dashScope === "year") return dashItems;
+    if (dashScope === "week") {
+      if (!selectedWeekRange) return [];
+      return dashItems.filter(
+        (item) => item.report_date >= selectedWeekRange.startIso && item.report_date <= selectedWeekRange.endIso
+      );
+    }
     if (dashScope === "month") {
       const monthPrefix = `${dashYear}-${dashMonth}`;
       return dashItems.filter((item) => item.report_date.startsWith(monthPrefix));
@@ -520,7 +654,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     const fromIso = `${dashYear}-${dashMonth}-${String(start).padStart(2, "0")}`;
     const toIso = `${dashYear}-${dashMonth}-${String(end).padStart(2, "0")}`;
     return dashItems.filter((item) => item.report_date >= fromIso && item.report_date <= toIso);
-  }, [dashDayFrom, dashDayTo, dashItems, dashMonth, dashScope, dashYear]);
+  }, [dashDayFrom, dashDayTo, dashItems, dashMonth, dashScope, dashYear, selectedWeekRange]);
 
   const dashTotals = useMemo(() => {
     let ca = 0;
@@ -528,7 +662,14 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     let clients = 0;
     let clientsN1 = 0;
     let caDelivery = 0;
+    let caDeliveryN1 = 0;
     let caCnc = 0;
+    let caCncN1 = 0;
+    let caMagasinN1 = 0;
+    let marge = 0;
+    let margeN1 = 0;
+    let pertesMontant = 0;
+    let pertesMontantN1 = 0;
     for (const item of scopedDashItems) {
       const kpi = item.kpi;
       const caReal = kpi?.ca_real ?? item.ca_net_total ?? 0;
@@ -537,12 +678,128 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       clients += kpi?.clients ?? item.tac_total ?? 0;
       clientsN1 += kpi?.clients_n1 ?? 0;
       caDelivery += kpi?.ca_delivery ?? 0;
+      caDeliveryN1 += kpi?.ca_delivery_n1 ?? 0;
       caCnc += kpi?.ca_click_collect ?? 0;
+      caCncN1 += kpi?.cnc_n1 ?? 0;
+      marge += item.marge ?? 0;
+      margeN1 += item.marge_n1 ?? 0;
+      pertesMontant += item.pertes_montant ?? 0;
+      pertesMontantN1 += item.pertes_montant_n1 ?? 0;
     }
     const mp = clients ? ca / clients : 0;
     const mpN1 = clientsN1 ? caN1 / clientsN1 : 0;
     const caMagasin = Math.max(0, ca - caDelivery - caCnc);
-    return { ca, caN1, clients, clientsN1, mp, mpN1, caDelivery, caCnc, caMagasin };
+    caMagasinN1 = Math.max(0, caN1 - caDeliveryN1 - caCncN1);
+    const tauxPertes = ca ? pertesMontant / ca : 0;
+    const tauxPertesN1 = caN1 ? pertesMontantN1 / caN1 : 0;
+    return {
+      ca,
+      caN1,
+      clients,
+      clientsN1,
+      mp,
+      mpN1,
+      caDelivery,
+      caDeliveryN1,
+      caCnc,
+      caCncN1,
+      caMagasin,
+      caMagasinN1,
+      marge,
+      margeN1,
+      pertesMontant,
+      pertesMontantN1,
+      tauxPertes,
+      tauxPertesN1,
+    };
+  }, [scopedDashItems]);
+  const workforceQuickMetrics = useMemo(() => {
+    let heuresPersonnel = 0;
+    let heuresPersonnelN1 = 0;
+    let heuresTravail = 0;
+    let heuresTravailN1 = 0;
+    let tauxHoraireWeighted = 0;
+    let tauxHoraireWeight = 0;
+    let tauxHoraireWeightedN1 = 0;
+    let tauxHoraireWeightN1 = 0;
+    let osatTotal = 0;
+    let osatCount = 0;
+    let osatTotalN1 = 0;
+    let osatCountN1 = 0;
+    let gxiTotal = 0;
+    let gxiCount = 0;
+    let gxiTotalN1 = 0;
+    let gxiCountN1 = 0;
+    let googleTotal = 0;
+    let googleCount = 0;
+    let googleTotalN1 = 0;
+    let googleCountN1 = 0;
+
+    for (const item of scopedDashItems) {
+      const kpi = item.kpi;
+      if (!kpi) continue;
+      if (kpi.heures_personnel !== null && kpi.heures_personnel !== undefined) {
+        heuresPersonnel += kpi.heures_personnel;
+      }
+      if (kpi.heures_personnel_n1 !== null && kpi.heures_personnel_n1 !== undefined) {
+        heuresPersonnelN1 += kpi.heures_personnel_n1;
+      }
+      if (kpi.heures_travail !== null && kpi.heures_travail !== undefined) {
+        heuresTravail += kpi.heures_travail;
+      }
+      if (kpi.heures_travail_n1 !== null && kpi.heures_travail_n1 !== undefined) {
+        heuresTravailN1 += kpi.heures_travail_n1;
+      }
+      if (kpi.taux_horaire !== null && kpi.taux_horaire !== undefined) {
+        const weight = kpi.heures_travail ?? 1;
+        tauxHoraireWeighted += kpi.taux_horaire * weight;
+        tauxHoraireWeight += weight;
+      }
+      if (kpi.taux_horaire_n1 !== null && kpi.taux_horaire_n1 !== undefined) {
+        const weightN1 = kpi.heures_travail_n1 ?? 1;
+        tauxHoraireWeightedN1 += kpi.taux_horaire_n1 * weightN1;
+        tauxHoraireWeightN1 += weightN1;
+      }
+      if (kpi.osat_score !== null && kpi.osat_score !== undefined) {
+        osatTotal += kpi.osat_score;
+        osatCount += 1;
+      }
+      if (kpi.osat_score_n1 !== null && kpi.osat_score_n1 !== undefined) {
+        osatTotalN1 += kpi.osat_score_n1;
+        osatCountN1 += 1;
+      }
+      if (kpi.gxi_score !== null && kpi.gxi_score !== undefined) {
+        gxiTotal += kpi.gxi_score;
+        gxiCount += 1;
+      }
+      if (kpi.gxi_score_n1 !== null && kpi.gxi_score_n1 !== undefined) {
+        gxiTotalN1 += kpi.gxi_score_n1;
+        gxiCountN1 += 1;
+      }
+      if (kpi.google_score !== null && kpi.google_score !== undefined) {
+        googleTotal += kpi.google_score;
+        googleCount += 1;
+      }
+      if (kpi.google_score_n1 !== null && kpi.google_score_n1 !== undefined) {
+        googleTotalN1 += kpi.google_score_n1;
+        googleCountN1 += 1;
+      }
+    }
+
+    return {
+      heuresPersonnel,
+      heuresPersonnelN1: heuresPersonnelN1 > 0 ? heuresPersonnelN1 : null,
+      heuresTravail,
+      heuresTravailN1: heuresTravailN1 > 0 ? heuresTravailN1 : null,
+      tauxHoraire: tauxHoraireWeight > 0 ? tauxHoraireWeighted / tauxHoraireWeight : null,
+      tauxHoraireN1: tauxHoraireWeightN1 > 0 ? tauxHoraireWeightedN1 / tauxHoraireWeightN1 : null,
+      osat: osatCount > 0 ? osatTotal / osatCount : null,
+      osatN1: osatCountN1 > 0 ? osatTotalN1 / osatCountN1 : null,
+      gxi: gxiCount > 0 ? gxiTotal / gxiCount : null,
+      gxiN1: gxiCountN1 > 0 ? gxiTotalN1 / gxiCountN1 : null,
+      google: googleCount > 0 ? googleTotal / googleCount : null,
+      googleN1: googleCountN1 > 0 ? googleTotalN1 / googleCountN1 : null,
+    };
   }, [scopedDashItems]);
 
   const channelBreakdown = useMemo(() => {
@@ -557,11 +814,210 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       share: total > 0 ? row.value / total : 0,
     }));
   }, [dashTotals.caCnc, dashTotals.caDelivery, dashTotals.caMagasin]);
+  const channelBreakdownN1 = useMemo(() => {
+    let caN1 = 0;
+    let caDeliveryN1 = 0;
+    let caCncN1 = 0;
+    for (const item of scopedDashItems) {
+      const kpi = item.kpi;
+      caN1 += kpi?.n1_ht ?? 0;
+      caDeliveryN1 += kpi?.ca_delivery_n1 ?? 0;
+      caCncN1 += kpi?.cnc_n1 ?? 0;
+    }
+    const caMagasinN1 = Math.max(0, caN1 - caDeliveryN1 - caCncN1);
+    const rows = [
+      { label: "Magasin", value: caMagasinN1 },
+      { label: "Delivery", value: caDeliveryN1 },
+      { label: "Click & Collect", value: caCncN1 },
+    ];
+    const total = rows.reduce((sum, row) => sum + row.value, 0);
+    return rows.map((row) => ({
+      ...row,
+      share: total > 0 ? row.value / total : 0,
+    }));
+  }, [scopedDashItems]);
 
   const channelMax = useMemo(
     () => Math.max(...channelBreakdown.map((row) => row.value), 1),
     [channelBreakdown]
   );
+  const channelTrend = useMemo(() => {
+    const empty = {
+      labels: [] as string[],
+      commentsN: [] as Array<string | null>,
+      commentsN1: [] as Array<string | null>,
+      series: [
+        { key: "magasin" as const, label: "Magasin", color: "#0f766e", n: [] as number[], n1: [] as number[] },
+        { key: "delivery" as const, label: "Delivery", color: "#3b82f6", n: [] as number[], n1: [] as number[] },
+        { key: "cnc" as const, label: "Click & Collect", color: "#f59e0b", n: [] as number[], n1: [] as number[] },
+      ],
+    };
+
+    const byDate = new Map<
+      string,
+      {
+        totalN: number;
+        totalN1: number;
+        deliveryN: number;
+        deliveryN1: number;
+        cncN: number;
+        cncN1: number;
+        commentN: string | null;
+        commentN1: string | null;
+      }
+    >();
+
+    for (const item of scopedDashItems) {
+      const prev = byDate.get(item.report_date) || {
+        totalN: 0,
+        totalN1: 0,
+        deliveryN: 0,
+        deliveryN1: 0,
+        cncN: 0,
+        cncN1: 0,
+        commentN: null,
+        commentN1: null,
+      };
+      const kpi = item.kpi;
+      prev.totalN += kpi?.ca_real ?? item.ca_net_total ?? 0;
+      prev.totalN1 += kpi?.n1_ht ?? 0;
+      prev.deliveryN += kpi?.ca_delivery ?? 0;
+      prev.deliveryN1 += kpi?.ca_delivery_n1 ?? 0;
+      prev.cncN += kpi?.ca_click_collect ?? 0;
+      prev.cncN1 += kpi?.cnc_n1 ?? 0;
+      prev.commentN = mergeComment(prev.commentN, item.comment ?? null);
+      prev.commentN1 = mergeComment(prev.commentN1, item.comment_n1 ?? null);
+      byDate.set(item.report_date, prev);
+    }
+
+    const pushBucket = (values: {
+      totalN: number;
+      totalN1: number;
+      deliveryN: number;
+      deliveryN1: number;
+      cncN: number;
+      cncN1: number;
+      commentN: string | null;
+      commentN1: string | null;
+    }) => {
+      const magasinN = Math.max(0, values.totalN - values.deliveryN - values.cncN);
+      const magasinN1 = Math.max(0, values.totalN1 - values.deliveryN1 - values.cncN1);
+      empty.series[0].n.push(magasinN);
+      empty.series[0].n1.push(magasinN1);
+      empty.series[1].n.push(values.deliveryN);
+      empty.series[1].n1.push(values.deliveryN1);
+      empty.series[2].n.push(values.cncN);
+      empty.series[2].n1.push(values.cncN1);
+      empty.commentsN.push(values.commentN);
+      empty.commentsN1.push(values.commentN1);
+    };
+
+    if (dashScope === "year") {
+      const yearNum = Number(dashYear);
+      if (!yearNum) return empty;
+      empty.labels = Array.from({ length: 12 }, (_, i) =>
+        new Intl.DateTimeFormat("fr-FR", { month: "short" }).format(new Date(yearNum, i, 1))
+      );
+      const monthBuckets = Array.from({ length: 12 }, () => ({
+        totalN: 0,
+        totalN1: 0,
+        deliveryN: 0,
+        deliveryN1: 0,
+        cncN: 0,
+        cncN1: 0,
+        commentN: null as string | null,
+        commentN1: null as string | null,
+      }));
+      for (const item of scopedDashItems) {
+        const monthIdx = Number(item.report_date.slice(5, 7)) - 1;
+        if (monthIdx < 0 || monthIdx > 11) continue;
+        const kpi = item.kpi;
+        monthBuckets[monthIdx].totalN += kpi?.ca_real ?? item.ca_net_total ?? 0;
+        monthBuckets[monthIdx].totalN1 += kpi?.n1_ht ?? 0;
+        monthBuckets[monthIdx].deliveryN += kpi?.ca_delivery ?? 0;
+        monthBuckets[monthIdx].deliveryN1 += kpi?.ca_delivery_n1 ?? 0;
+        monthBuckets[monthIdx].cncN += kpi?.ca_click_collect ?? 0;
+        monthBuckets[monthIdx].cncN1 += kpi?.cnc_n1 ?? 0;
+        monthBuckets[monthIdx].commentN = mergeComment(monthBuckets[monthIdx].commentN, item.comment ?? null);
+        monthBuckets[monthIdx].commentN1 = mergeComment(monthBuckets[monthIdx].commentN1, item.comment_n1 ?? null);
+      }
+      monthBuckets.forEach(pushBucket);
+      return empty;
+    }
+
+    if (dashScope === "week") {
+      if (!selectedWeekRange) return empty;
+      const weekStart = new Date(`${selectedWeekRange.startIso}T00:00:00Z`);
+      for (let i = 0; i < 7; i += 1) {
+        const current = new Date(weekStart);
+        current.setUTCDate(weekStart.getUTCDate() + i);
+        const iso = current.toISOString().slice(0, 10);
+        empty.labels.push(formatIsoDayMonth(iso));
+        pushBucket(
+          byDate.get(iso) || {
+            totalN: 0,
+            totalN1: 0,
+            deliveryN: 0,
+            deliveryN1: 0,
+            cncN: 0,
+            cncN1: 0,
+            commentN: null,
+            commentN1: null,
+          }
+        );
+      }
+      return empty;
+    }
+
+    if (dashScope === "day") {
+      const from = Number(dashDayFrom);
+      const to = Number(dashDayTo);
+      if (!from || !to) return empty;
+      const start = Math.min(from, to);
+      const end = Math.max(from, to);
+      for (let d = start; d <= end; d += 1) {
+        const day = String(d).padStart(2, "0");
+        const iso = `${dashYear}-${dashMonth}-${day}`;
+        empty.labels.push(day);
+        pushBucket(
+          byDate.get(iso) || {
+            totalN: 0,
+            totalN1: 0,
+            deliveryN: 0,
+            deliveryN1: 0,
+            cncN: 0,
+            cncN1: 0,
+            commentN: null,
+            commentN1: null,
+          }
+        );
+      }
+      return empty;
+    }
+
+    const yearNum = Number(dashYear);
+    const monthNum = Number(dashMonth);
+    if (!yearNum || !monthNum) return empty;
+    const lastDay = new Date(yearNum, monthNum, 0).getDate();
+    for (let d = 1; d <= lastDay; d += 1) {
+      const day = String(d).padStart(2, "0");
+      const iso = `${dashYear}-${dashMonth}-${day}`;
+      empty.labels.push(day);
+      pushBucket(
+        byDate.get(iso) || {
+          totalN: 0,
+          totalN1: 0,
+          deliveryN: 0,
+          deliveryN1: 0,
+          cncN: 0,
+          cncN1: 0,
+          commentN: null,
+          commentN1: null,
+        }
+      );
+    }
+    return empty;
+  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, scopedDashItems, selectedWeekRange]);
 
   const dashTrend = useMemo(() => {
     if (dashScope === "year") {
@@ -570,51 +1026,94 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       );
       const n = Array.from({ length: 12 }, () => 0);
       const n1 = Array.from({ length: 12 }, () => 0);
+      const commentsN = Array.from({ length: 12 }, () => null as string | null);
+      const commentsN1 = Array.from({ length: 12 }, () => null as string | null);
       for (const item of scopedDashItems) {
         const monthIdx = Number(item.report_date.slice(5, 7)) - 1;
         if (monthIdx < 0 || monthIdx > 11) continue;
         n[monthIdx] += item.kpi?.ca_real ?? item.ca_net_total ?? 0;
         n1[monthIdx] += item.kpi?.n1_ht ?? 0;
+        commentsN[monthIdx] = mergeComment(commentsN[monthIdx], item.comment ?? null);
+        commentsN1[monthIdx] = mergeComment(commentsN1[monthIdx], item.comment_n1 ?? null);
       }
-      return { labels, n, n1 };
+      return { labels, n, n1, commentsN, commentsN1 };
+    }
+
+    if (dashScope === "week") {
+      if (!selectedWeekRange) return { labels: [], n: [], n1: [], commentsN: [], commentsN1: [] };
+      const labels: string[] = [];
+      const n: number[] = [];
+      const n1: number[] = [];
+      const commentsN: Array<string | null> = [];
+      const commentsN1: Array<string | null> = [];
+      const byDate = new Map<string, { n: number; n1: number; commentN: string | null; commentN1: string | null }>();
+      for (const item of scopedDashItems) {
+        const prev = byDate.get(item.report_date) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        prev.n += item.kpi?.ca_real ?? item.ca_net_total ?? 0;
+        prev.n1 += item.kpi?.n1_ht ?? 0;
+        prev.commentN = mergeComment(prev.commentN, item.comment ?? null);
+        prev.commentN1 = mergeComment(prev.commentN1, item.comment_n1 ?? null);
+        byDate.set(item.report_date, prev);
+      }
+      const weekStart = new Date(`${selectedWeekRange.startIso}T00:00:00Z`);
+      for (let i = 0; i < 7; i += 1) {
+        const current = new Date(weekStart);
+        current.setUTCDate(weekStart.getUTCDate() + i);
+        const iso = current.toISOString().slice(0, 10);
+        const values = byDate.get(iso) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        labels.push(formatIsoDayMonth(iso));
+        n.push(values.n);
+        n1.push(values.n1);
+        commentsN.push(values.commentN);
+        commentsN1.push(values.commentN1);
+      }
+      return { labels, n, n1, commentsN, commentsN1 };
     }
 
     if (dashScope === "day") {
       const from = Number(dashDayFrom);
       const to = Number(dashDayTo);
-      if (!from || !to) return { labels: [], n: [], n1: [] };
+      if (!from || !to) return { labels: [], n: [], n1: [], commentsN: [], commentsN1: [] };
       const start = Math.min(from, to);
       const end = Math.max(from, to);
       const labels: string[] = [];
       const n: number[] = [];
       const n1: number[] = [];
-      const byDate = new Map<string, { n: number; n1: number }>();
+      const commentsN: Array<string | null> = [];
+      const commentsN1: Array<string | null> = [];
+      const byDate = new Map<string, { n: number; n1: number; commentN: string | null; commentN1: string | null }>();
       for (const item of scopedDashItems) {
-        const prev = byDate.get(item.report_date) || { n: 0, n1: 0 };
+        const prev = byDate.get(item.report_date) || { n: 0, n1: 0, commentN: null, commentN1: null };
         prev.n += item.kpi?.ca_real ?? item.ca_net_total ?? 0;
         prev.n1 += item.kpi?.n1_ht ?? 0;
+        prev.commentN = mergeComment(prev.commentN, item.comment ?? null);
+        prev.commentN1 = mergeComment(prev.commentN1, item.comment_n1 ?? null);
         byDate.set(item.report_date, prev);
       }
       for (let d = start; d <= end; d += 1) {
         const day = String(d).padStart(2, "0");
         const iso = `${dashYear}-${dashMonth}-${day}`;
-        const values = byDate.get(iso) || { n: 0, n1: 0 };
+        const values = byDate.get(iso) || { n: 0, n1: 0, commentN: null, commentN1: null };
         labels.push(day);
         n.push(values.n);
         n1.push(values.n1);
+        commentsN.push(values.commentN);
+        commentsN1.push(values.commentN1);
       }
-      return { labels, n, n1 };
+      return { labels, n, n1, commentsN, commentsN1 };
     }
 
     const yearNum = Number(dashYear);
     const monthNum = Number(dashMonth);
-    if (!yearNum || !monthNum) return { labels: [], n: [], n1: [] };
+    if (!yearNum || !monthNum) return { labels: [], n: [], n1: [], commentsN: [], commentsN1: [] };
     const lastDay = new Date(yearNum, monthNum, 0).getDate();
     const byDate = new Map<string, MonthlyItem>();
     scopedDashItems.forEach((item) => byDate.set(item.report_date, item));
     const labels: string[] = [];
     const n: number[] = [];
     const n1: number[] = [];
+    const commentsN: Array<string | null> = [];
+    const commentsN1: Array<string | null> = [];
     for (let d = 1; d <= lastDay; d += 1) {
       const iso = new Date(Date.UTC(yearNum, monthNum - 1, d)).toISOString().slice(0, 10);
       const item = byDate.get(iso);
@@ -623,9 +1122,11 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       labels.push(String(d));
       n.push(caReal);
       n1.push(caN1);
+      commentsN.push(item?.comment ?? null);
+      commentsN1.push(item?.comment_n1 ?? null);
     }
-    return { labels, n, n1 };
-  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, scopedDashItems]);
+    return { labels, n, n1, commentsN, commentsN1 };
+  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, scopedDashItems, selectedWeekRange]);
 
   const salesTrend = useMemo(() => {
     if (dashScope === "year") {
@@ -634,51 +1135,94 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       );
       const n = Array.from({ length: 12 }, () => 0);
       const n1 = Array.from({ length: 12 }, () => 0);
+      const commentsN = Array.from({ length: 12 }, () => null as string | null);
+      const commentsN1 = Array.from({ length: 12 }, () => null as string | null);
       for (const item of scopedDashItems) {
         const monthIdx = Number(item.report_date.slice(5, 7)) - 1;
         if (monthIdx < 0 || monthIdx > 11) continue;
         n[monthIdx] += item.kpi?.clients ?? item.tac_total ?? 0;
         n1[monthIdx] += item.kpi?.clients_n1 ?? 0;
+        commentsN[monthIdx] = mergeComment(commentsN[monthIdx], item.comment ?? null);
+        commentsN1[monthIdx] = mergeComment(commentsN1[monthIdx], item.comment_n1 ?? null);
       }
-      return { labels, n, n1 };
+      return { labels, n, n1, commentsN, commentsN1 };
+    }
+
+    if (dashScope === "week") {
+      if (!selectedWeekRange) return { labels: [], n: [], n1: [], commentsN: [], commentsN1: [] };
+      const labels: string[] = [];
+      const n: number[] = [];
+      const n1: number[] = [];
+      const commentsN: Array<string | null> = [];
+      const commentsN1: Array<string | null> = [];
+      const byDate = new Map<string, { n: number; n1: number; commentN: string | null; commentN1: string | null }>();
+      for (const item of scopedDashItems) {
+        const prev = byDate.get(item.report_date) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        prev.n += item.kpi?.clients ?? item.tac_total ?? 0;
+        prev.n1 += item.kpi?.clients_n1 ?? 0;
+        prev.commentN = mergeComment(prev.commentN, item.comment ?? null);
+        prev.commentN1 = mergeComment(prev.commentN1, item.comment_n1 ?? null);
+        byDate.set(item.report_date, prev);
+      }
+      const weekStart = new Date(`${selectedWeekRange.startIso}T00:00:00Z`);
+      for (let i = 0; i < 7; i += 1) {
+        const current = new Date(weekStart);
+        current.setUTCDate(weekStart.getUTCDate() + i);
+        const iso = current.toISOString().slice(0, 10);
+        const values = byDate.get(iso) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        labels.push(formatIsoDayMonth(iso));
+        n.push(values.n);
+        n1.push(values.n1);
+        commentsN.push(values.commentN);
+        commentsN1.push(values.commentN1);
+      }
+      return { labels, n, n1, commentsN, commentsN1 };
     }
 
     if (dashScope === "day") {
       const from = Number(dashDayFrom);
       const to = Number(dashDayTo);
-      if (!from || !to) return { labels: [], n: [], n1: [] };
+      if (!from || !to) return { labels: [], n: [], n1: [], commentsN: [], commentsN1: [] };
       const start = Math.min(from, to);
       const end = Math.max(from, to);
       const labels: string[] = [];
       const n: number[] = [];
       const n1: number[] = [];
-      const byDate = new Map<string, { n: number; n1: number }>();
+      const commentsN: Array<string | null> = [];
+      const commentsN1: Array<string | null> = [];
+      const byDate = new Map<string, { n: number; n1: number; commentN: string | null; commentN1: string | null }>();
       for (const item of scopedDashItems) {
-        const prev = byDate.get(item.report_date) || { n: 0, n1: 0 };
+        const prev = byDate.get(item.report_date) || { n: 0, n1: 0, commentN: null, commentN1: null };
         prev.n += item.kpi?.clients ?? item.tac_total ?? 0;
         prev.n1 += item.kpi?.clients_n1 ?? 0;
+        prev.commentN = mergeComment(prev.commentN, item.comment ?? null);
+        prev.commentN1 = mergeComment(prev.commentN1, item.comment_n1 ?? null);
         byDate.set(item.report_date, prev);
       }
       for (let d = start; d <= end; d += 1) {
         const day = String(d).padStart(2, "0");
         const iso = `${dashYear}-${dashMonth}-${day}`;
-        const values = byDate.get(iso) || { n: 0, n1: 0 };
+        const values = byDate.get(iso) || { n: 0, n1: 0, commentN: null, commentN1: null };
         labels.push(day);
         n.push(values.n);
         n1.push(values.n1);
+        commentsN.push(values.commentN);
+        commentsN1.push(values.commentN1);
       }
-      return { labels, n, n1 };
+      return { labels, n, n1, commentsN, commentsN1 };
     }
 
     const yearNum = Number(dashYear);
     const monthNum = Number(dashMonth);
-    if (!yearNum || !monthNum) return { labels: [], n: [], n1: [] };
+    if (!yearNum || !monthNum) return { labels: [], n: [], n1: [], commentsN: [], commentsN1: [] };
     const lastDay = new Date(yearNum, monthNum, 0).getDate();
     const byDate = new Map<string, MonthlyItem>();
     scopedDashItems.forEach((item) => byDate.set(item.report_date, item));
     const labels: string[] = [];
     const n: number[] = [];
     const n1: number[] = [];
+    const commentsN: Array<string | null> = [];
+    const commentsN1: Array<string | null> = [];
     for (let d = 1; d <= lastDay; d += 1) {
       const iso = new Date(Date.UTC(yearNum, monthNum - 1, d)).toISOString().slice(0, 10);
       const item = byDate.get(iso);
@@ -687,13 +1231,17 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       labels.push(String(d));
       n.push(clients);
       n1.push(clientsN1);
+      commentsN.push(item?.comment ?? null);
+      commentsN1.push(item?.comment_n1 ?? null);
     }
-    return { labels, n, n1 };
-  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, scopedDashItems]);
+    return { labels, n, n1, commentsN, commentsN1 };
+  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, scopedDashItems, selectedWeekRange]);
 
   const basketTrend = useMemo(() => {
     const len = Math.min(dashTrend.labels.length, salesTrend.labels.length);
     const labels = dashTrend.labels.slice(0, len);
+    const commentsN = (dashTrend.commentsN ?? []).slice(0, len);
+    const commentsN1 = (dashTrend.commentsN1 ?? []).slice(0, len);
     const n = labels.map((_, idx) => {
       const clients = salesTrend.n[idx] ?? 0;
       const ca = dashTrend.n[idx] ?? 0;
@@ -704,15 +1252,15 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       const caN1 = dashTrend.n1[idx] ?? 0;
       return clientsN1 > 0 ? caN1 / clientsN1 : 0;
     });
-    return { labels, n, n1 };
+    return { labels, n, n1, commentsN, commentsN1 };
   }, [dashTrend, salesTrend]);
 
   const trendChart = useMemo(() => {
-    const padLeft = 56;
-    const padRight = 20;
+    const padLeft = 2;
+    const padRight = 2;
     const padTop = 28;
     const padBottom = 38;
-    const chartWidth = 640;
+    const chartWidth = 920;
     const chartHeight = 300;
     const w = chartWidth - padLeft - padRight;
     const h = chartHeight - padTop - padBottom;
@@ -775,12 +1323,12 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     ) {
       return null;
     }
-    return { label, n, n1, nPoint, n1Point };
+    return { label, n, n1, nPoint, n1Point, idx: hoveredTrendIndex };
   }, [dashTrend, hoveredTrendIndex, trendChart]);
 
   useEffect(() => {
     setHoveredTrendIndex(null);
-  }, [dashScope, dashYear, dashMonth, dashDayFrom, dashDayTo, dashRestaurant]);
+  }, [dashScope, dashYear, dashMonth, dashWeek, dashDayFrom, dashDayTo, dashRestaurant]);
 
   const storeQuickView = useMemo(() => {
     const map = new Map<string, { code: string; name: string; ca: number; caN1: number; clients: number }>();
@@ -815,42 +1363,58 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   };
 
   async function handleCreateUser() {
-    setCreateMsg(null);
     const email = newEmail.trim().toLowerCase();
     if (!email) {
-      setCreateMsg("Email requis.");
-      return;
-    }
-    if (newPassword.length < 8) {
-      setCreateMsg("Mot de passe trop court (min 8).");
-      return;
-    }
-    if (newPassword !== newPassword2) {
-      setCreateMsg("Les mots de passe ne correspondent pas.");
+      setCreateUserDialog({
+        open: true,
+        kind: "error",
+        title: "Création impossible",
+        description: "Email requis.",
+      });
       return;
     }
     if (isAdmin && newRole !== "READONLY" && newRole !== "MANAGER") {
-      setCreateMsg("Un admin peut uniquement créer des utilisateurs READONLY ou MANAGER.");
+      setCreateUserDialog({
+        open: true,
+        kind: "error",
+        title: "Création impossible",
+        description: "Un admin peut uniquement créer des utilisateurs READONLY ou MANAGER.",
+      });
       return;
     }
     try {
       const res = await createUser({
         email,
-        password: newPassword,
         role: newRole,
         first_name: newFirstName.trim() || null,
         last_name: newLastName.trim() || null,
       });
-      setCreateMsg(`Utilisateur créé: ${res.email} (${res.role})`);
+      const emailFeedback = res.email_sent
+        ? "Mail de bienvenue envoyé."
+        : `Mail non envoyé${res.email_error ? ` (${res.email_error})` : ""}.`;
+      setCreateUserDialog({
+        open: true,
+        kind: "success",
+        title: "Utilisateur créé avec succès",
+        description: `Compte: ${res.email} (${res.role})\nMot de passe temporaire actif (changement obligatoire à la première connexion).\n${emailFeedback}`,
+      });
       setNewFirstName("");
       setNewLastName("");
       setNewEmail("");
-      setNewPassword("");
-      setNewPassword2("");
       setNewRole("READONLY");
       await loadDevUsers();
     } catch (e: any) {
-      setCreateMsg(`Erreur: ${e?.message ?? "Erreur création utilisateur"}`);
+      const rawMessage = String(e?.message ?? "Erreur création utilisateur");
+      const localizedMessage =
+        rawMessage === "Email already exists"
+          ? "Cet email existe déjà"
+          : rawMessage;
+      setCreateUserDialog({
+        open: true,
+        kind: "error",
+        title: "Échec de création utilisateur",
+        description: localizedMessage,
+      });
     }
   }
 
@@ -887,6 +1451,13 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
             await loadDevUsers();
             await loadUserRestaurants();
           }}
+        />
+        <StatusDialog
+          open={createUserDialog.open}
+          kind={createUserDialog.kind}
+          title={createUserDialog.title}
+          description={createUserDialog.description}
+          onClose={() => setCreateUserDialog((prev) => ({ ...prev, open: false }))}
         />
         <ConfirmDialog
           open={Boolean(confirmRemoveAssoc)}
@@ -933,6 +1504,125 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
               onLogout={handleLogout}
             />
 
+            {activeTab === "overview" ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="w-full space-y-1 sm:w-[140px]">
+                    <div className="text-xs text-muted-foreground">Période</div>
+                    <select
+                      className={headerFilterSelectClass}
+                      value={dashScope}
+                      onChange={(e) => setDashScope(e.target.value as DashScope)}
+                    >
+                      <option value="year">Année</option>
+                      <option value="month">Mois</option>
+                      <option value="week">Semaine</option>
+                      <option value="day">Jour</option>
+                    </select>
+                  </div>
+                  <div className="w-full space-y-1 sm:w-[120px]">
+                    <div className="text-xs text-muted-foreground">Année</div>
+                    <select
+                      className={headerFilterSelectClass}
+                      value={dashYear}
+                      onChange={(e) => setDashYear(e.target.value)}
+                    >
+                      {yearOptions.map((y) => (
+                        <option key={y} value={String(y)}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {dashScope === "month" || dashScope === "day" ? (
+                    <div className="w-full space-y-1 sm:w-[160px]">
+                      <div className="text-xs text-muted-foreground">Mois</div>
+                      <select
+                        className={headerFilterSelectClass}
+                        value={dashMonth}
+                        onChange={(e) => setDashMonth(e.target.value)}
+                      >
+                        {Array.from({ length: 12 }, (_, i) => {
+                          const label = new Intl.DateTimeFormat("fr-FR", { month: "long" }).format(
+                            new Date(2000, i, 1)
+                          );
+                          const value = String(i + 1).padStart(2, "0");
+                          return (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  ) : null}
+                  {dashScope === "week" ? (
+                    <div className="w-full space-y-1 sm:w-[120px]">
+                      <div className="text-xs text-muted-foreground">Semaine</div>
+                      <select
+                        className={headerFilterSelectClass}
+                        value={dashWeek}
+                        onChange={(e) => setDashWeek(e.target.value)}
+                      >
+                        {weekOptions.map((week) => (
+                          <option key={week} value={week}>
+                            S{week}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                  {dashScope === "day" ? (
+                    <div className="w-full space-y-1 sm:w-[95px]">
+                      <div className="text-xs text-muted-foreground">Du</div>
+                      <select
+                        className={headerFilterSelectClass}
+                        value={dashDayFrom}
+                        onChange={(e) => setDashDayFrom(e.target.value)}
+                      >
+                        {dayOptions.map((day) => (
+                          <option key={day} value={day}>
+                            {day}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                  {dashScope === "day" ? (
+                    <div className="w-full space-y-1 sm:w-[95px]">
+                      <div className="text-xs text-muted-foreground">Au</div>
+                      <select
+                        className={headerFilterSelectClass}
+                        value={dashDayTo}
+                        onChange={(e) => setDashDayTo(e.target.value)}
+                      >
+                        {dayToOptions.map((day) => (
+                          <option key={day} value={day}>
+                            {day}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                  <div className="w-full space-y-1 sm:w-[260px]">
+                    <div className="text-xs text-muted-foreground">Restaurant</div>
+                    <select
+                      className={headerFilterSelectClass}
+                      value={dashRestaurant}
+                      onChange={(e) => setDashRestaurant(e.target.value)}
+                    >
+                      <option value="">Tous les magasins</option>
+                      {restaurants.map((r) => (
+                        <option key={r.id} value={r.code}>
+                          {r.code} - {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             {err && (
               <Card className="border-destructive/40">
                 <CardHeader>
@@ -947,21 +1637,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
               dailyStatus={dailyStatus}
               onImportNow={() => navigate(TAB_TO_PATH.data)}
               dashScope={dashScope}
-              setDashScope={setDashScope}
-              yearOptions={yearOptions}
-              dashYear={dashYear}
-              setDashYear={setDashYear}
-              dashMonth={dashMonth}
-              setDashMonth={setDashMonth}
-              dashDayFrom={dashDayFrom}
-              setDashDayFrom={setDashDayFrom}
-              dashDayTo={dashDayTo}
-              setDashDayTo={setDashDayTo}
-              dayOptions={dayOptions}
-              dayToOptions={dayToOptions}
-              restaurants={restaurants}
-              dashRestaurant={dashRestaurant}
-              setDashRestaurant={setDashRestaurant}
+              dashWeek={dashWeek}
               dashErr={dashErr}
               dashLoading={dashLoading}
               filtersSummary={filtersSummary}
@@ -980,23 +1656,26 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
               setHoveredTrendIndex={setHoveredTrendIndex}
               dashTrend={dashTrend}
               channelBreakdown={channelBreakdown}
+              channelBreakdownN1={channelBreakdownN1}
+              channelTrend={channelTrend}
               channelMax={channelMax}
               salesTrend={salesTrend}
               basketTrend={basketTrend}
               storeQuickView={storeQuickView}
+              workforceQuickMetrics={workforceQuickMetrics}
             />
 
             <ImportsPage
               visible={canImportData}
               restaurants={restaurants}
               canReplaceImport={canReplaceImport}
+              showDebugHead={isDev || isAdmin}
               pendingReimport={pendingReimport}
               onPendingReimportHandled={() => setPendingReimport(null)}
-              onUploaded={(r) => {
-                setReport(r);
+              onUploaded={() => {
                 refreshDailyStatus();
+                setDashRefreshTick((tick) => tick + 1);
               }}
-              report={report}
             />
 
             <HistoryPage
@@ -1026,29 +1705,23 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
               setNewLastName={setNewLastName}
               newEmail={newEmail}
               setNewEmail={setNewEmail}
-              newPassword={newPassword}
-              setNewPassword={setNewPassword}
-              newPassword2={newPassword2}
-              setNewPassword2={setNewPassword2}
               newRole={newRole}
               setNewRole={setNewRole}
               handleCreateUser={handleCreateUser}
-              createMsg={createMsg}
               devUsers={devUsers}
-              usersPageItems={usersPageItems}
               meId={me?.id}
               onAskDeleteUser={(id, email) => {
                 if (!canDeleteUsers) return;
                 setConfirmDeleteUser({ id, label: `${email} (id=${id})` });
               }}
               pageSize={pageSize}
-              devUsersPage={devUsersPage}
-              totalUserPages={totalUserPages}
-              onPrevUsersPage={() => setDevUsersPage((p) => Math.max(1, p - 1))}
-              onNextUsersPage={() => setDevUsersPage((p) => Math.min(totalUserPages, p + 1))}
               assocLoading={assocLoading}
               assocMsg={assocMsg}
               assocUsers={assocUsers}
+              assocUsersPageItems={assocUsersPageItems}
+              assocUsersPage={assocUsersPage}
+              totalAssocPages={totalAssocPages}
+              onSetAssocUsersPage={(page) => setAssocUsersPage(Math.max(1, Math.min(totalAssocPages, page)))}
               onRemoveAssoc={async (u, code) => {
                 const nextCodes = u.restaurants.filter((x) => x.code !== code).map((x) => x.code);
                 const userLabel = (u.first_name || u.last_name)
@@ -1064,6 +1737,3 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     </div>
   );
 }
-
-
-

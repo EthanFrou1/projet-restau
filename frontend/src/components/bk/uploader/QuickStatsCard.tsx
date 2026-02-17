@@ -1,8 +1,6 @@
 ﻿import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Restaurant } from "@/components/bk/uploader/types";
-
 type Props = {
-  restaurants: Restaurant[];
+  assignedCount: number;
   doneCount: number;
   pendingCount: number;
   yearlyMissing: number;
@@ -10,7 +8,7 @@ type Props = {
 };
 
 export function QuickStatsCard({
-  restaurants,
+  assignedCount,
   doneCount,
   pendingCount,
   yearlyMissing,
@@ -26,7 +24,7 @@ export function QuickStatsCard({
           <Card>
             <CardContent className="pt-4">
               <div className="text-xs text-muted-foreground">Restaurants assignés</div>
-              <div className="text-3xl font-semibold md:text-4xl">{restaurants.length}</div>
+              <div className="text-3xl font-semibold md:text-4xl">{assignedCount}</div>
             </CardContent>
           </Card>
           <Card>
@@ -37,13 +35,13 @@ export function QuickStatsCard({
           </Card>
           <Card>
             <CardContent className="pt-4">
-              <div className="text-xs text-muted-foreground">À faire aujourd'hui</div>
+              <div className="text-xs text-muted-foreground">Imports à faire aujourd'hui</div>
               <div className="text-3xl font-semibold text-amber-700 md:text-4xl">{pendingCount}</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4">
-              <div className="text-xs text-muted-foreground">Manquants année (cumul)</div>
+              <div className="text-xs text-muted-foreground">Imports manquants année (cumul)</div>
               <div className="text-3xl font-semibold text-red-600 md:text-4xl">
                 {yearlyMissingLoading ? "..." : yearlyMissing}
               </div>

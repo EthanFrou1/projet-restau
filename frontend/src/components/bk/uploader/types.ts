@@ -1,4 +1,4 @@
-﻿export type Restaurant = { id: number; code: string; name: string };
+export type Restaurant = { id: number; code: string; name: string; can_import?: boolean };
 
 export type ReportListItem = {
   id: number;

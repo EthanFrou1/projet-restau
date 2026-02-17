@@ -5,7 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export default function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
+export default function LoginPage({
+  onLoggedIn,
+}: {
+  onLoggedIn: (mustChangePassword: boolean) => void;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -17,8 +21,8 @@ export default function LoginPage({ onLoggedIn }: { onLoggedIn: () => void }) {
     setLoading(true);
     setError(null);
     try {
-      await login(email, password);
-      onLoggedIn();
+      const data = await login(email, password);
+      onLoggedIn(Boolean(data.must_change_password));
     } catch (e: any) {
         if (e?.name === "ApiError" && e.status === 401) {
             setError("Email ou mot de passe incorrect.");

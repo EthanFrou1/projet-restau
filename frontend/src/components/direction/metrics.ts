@@ -10,7 +10,13 @@ export type MetricKey =
   | "mp"
   | "mpN1"
   | "caDelivery"
-  | "caClickCollect";
+  | "caClickCollect"
+  | "heuresPersonnel"
+  | "heuresTravail"
+  | "tauxHoraire"
+  | "osat"
+  | "gxi"
+  | "google";
 
 export type MetricDef = {
   key: MetricKey;
@@ -29,6 +35,12 @@ export const METRICS: MetricDef[] = [
   { key: "mpN1", label: "Panier moyen N-1", format: "money" },
   { key: "caDelivery", label: "CA Delivery", format: "money" },
   { key: "caClickCollect", label: "CA Click & Collect", format: "money" },
+  { key: "heuresPersonnel", label: "Heures personnel", format: "int" },
+  { key: "heuresTravail", label: "Heures formation (coût complémentaire)", format: "int" },
+  { key: "tauxHoraire", label: "Taux horaire (EUR)", format: "money" },
+  { key: "osat", label: "OSAT (%)", format: "pct" },
+  { key: "gxi", label: "GXI", format: "int" },
+  { key: "google", label: "Google", format: "int" },
 ];
 
 export function getMetricValue(entity: DirectionEntity, key: MetricKey): number | null {
@@ -42,6 +54,12 @@ export function getMetricValue(entity: DirectionEntity, key: MetricKey): number 
   if (key === "mpN1") return entity.clientsN1 === 0 ? null : entity.n1 / entity.clientsN1;
   if (key === "caDelivery") return entity.caDelivery;
   if (key === "caClickCollect") return entity.caClickCollect;
+  if (key === "heuresPersonnel") return entity.heuresPersonnel;
+  if (key === "heuresTravail") return entity.heuresTravail;
+  if (key === "tauxHoraire") return entity.tauxHoraire;
+  if (key === "osat") return entity.osat === null ? null : entity.osat / 100;
+  if (key === "gxi") return entity.gxi;
+  if (key === "google") return entity.google;
   return null;
 }
 
@@ -57,6 +75,12 @@ export function computeBestByMetric(entities: DirectionEntity[]): Record<MetricK
     mpN1: null,
     caDelivery: null,
     caClickCollect: null,
+    heuresPersonnel: null,
+    heuresTravail: null,
+    tauxHoraire: null,
+    osat: null,
+    gxi: null,
+    google: null,
   };
 
   for (const metric of METRICS) {

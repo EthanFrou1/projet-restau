@@ -1,7 +1,6 @@
 import { apiFetch } from "@/lib/api";
 
-export type RestaurantZone = "NON_DEFINIE" | "ZONE_EST" | "ZONE_OUEST" | "ZONE_SUD" | "ZONE_NORD";
-export type RestaurantDto = { id: number; code: string; name: string; zone: RestaurantZone };
+export type RestaurantDto = { id: number; code: string; name: string; can_import?: boolean };
 
 export async function getMyRestaurants() {
   return apiFetch<RestaurantDto[]>("/restaurants/mine");
@@ -11,7 +10,7 @@ export async function listRestaurants() {
   return apiFetch<RestaurantDto[]>("/debug/restaurants");
 }
 
-export async function createRestaurant(payload: { code: string; name: string; zone: RestaurantZone }) {
+export async function createRestaurant(payload: { code: string; name: string }) {
   return apiFetch<RestaurantDto>("/debug/restaurants", {
     method: "POST",
     body: JSON.stringify(payload),
