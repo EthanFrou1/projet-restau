@@ -10,6 +10,7 @@ import type { DirectionEntity, MonthlyItem, Restaurant } from "@/components/dire
 
 type Props = {
   restaurants: Restaurant[];
+  openExportSignal?: number;
 };
 
 const moneyFmt = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
@@ -20,7 +21,7 @@ const pctFmt = new Intl.NumberFormat("fr-FR", {
   maximumFractionDigits: 2,
 });
 
-export function DirectionExecutive({ restaurants }: Props) {
+export function DirectionExecutive({ restaurants, openExportSignal = 0 }: Props) {
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [selectedRestaurant, setSelectedRestaurant] = useState<"ALL" | string>("ALL");
   const [items, setItems] = useState<MonthlyItem[]>([]);
@@ -165,6 +166,12 @@ export function DirectionExecutive({ restaurants }: Props) {
 
   const bestByMetric = useMemo(() => computeBestByMetric(entities), [entities]);
 
+  useEffect(() => {
+    if (openExportSignal > 0) {
+      setExportModalOpen(true);
+    }
+  }, [openExportSignal]);
+
   return (
     <section className="space-y-4">
       <DirectionFilters
@@ -174,7 +181,6 @@ export function DirectionExecutive({ restaurants }: Props) {
         selectedRestaurant={selectedRestaurant}
         onSelectedRestaurantChange={setSelectedRestaurant}
         restaurants={restaurants}
-        onExportPdf={() => setExportModalOpen(true)}
       />
 
       <DirectionSummary

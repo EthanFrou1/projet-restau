@@ -88,11 +88,18 @@ export function exportDirectionPdf(params: {
   </body>
 </html>`;
 
-  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1200,height=900");
+  const printWindow = window.open("", "_blank", "width=1200,height=900");
   if (!printWindow) return;
+
   printWindow.document.open();
   printWindow.document.write(html);
   printWindow.document.close();
-  printWindow.focus();
-  printWindow.print();
+
+  const tryPrint = () => {
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  printWindow.onload = tryPrint;
+  setTimeout(tryPrint, 250);
 }

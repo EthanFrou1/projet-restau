@@ -45,7 +45,7 @@ export function DailyImportBanner({ visible, status, onImportNow }: Props) {
               {status.date ? ` (${dateLabel})` : ""} pour :{" "}
               <span className="font-medium">{status.missing.map((r) => r.code).join(", ")}</span>
             </div>
-            <Button variant="outline" onClick={onImportNow}>
+            <Button onClick={onImportNow}>
               Importer maintenant
             </Button>
           </div>

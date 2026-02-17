@@ -7,7 +7,6 @@ type Props = {
   selectedRestaurant: "ALL" | string;
   onSelectedRestaurantChange: (value: "ALL" | string) => void;
   restaurants: Restaurant[];
-  onExportPdf: () => void;
 };
 
 export function DirectionFilters({
@@ -17,10 +16,9 @@ export function DirectionFilters({
   selectedRestaurant,
   onSelectedRestaurantChange,
   restaurants,
-  onExportPdf,
 }: Props) {
   return (
-    <div className="grid gap-3 rounded-xl border bg-card p-4 md:grid-cols-3">
+    <div className="grid gap-3 rounded-xl border bg-card p-4 md:grid-cols-2">
       <div className="space-y-1">
         <div className="text-xs text-muted-foreground">Année</div>
         <select
@@ -35,6 +33,7 @@ export function DirectionFilters({
           ))}
         </select>
       </div>
+
       <div className="space-y-1">
         <div className="text-xs text-muted-foreground">Restaurant</div>
         <select
@@ -49,15 +48,6 @@ export function DirectionFilters({
             </option>
           ))}
         </select>
-      </div>
-      <div className="flex items-end">
-        <button
-          type="button"
-          className="h-10 w-full rounded-md border bg-slate-900 px-3 text-sm font-medium text-white hover:bg-slate-800"
-          onClick={onExportPdf}
-        >
-          Export PDF
-        </button>
       </div>
     </div>
   );

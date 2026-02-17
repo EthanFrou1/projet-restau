@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 import type { DirectionEntity } from "@/components/direction/types";
 
 type Props = {
@@ -70,12 +71,11 @@ export function DirectionExportModal({ open, restaurantRows, onCancel, onConfirm
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t p-4">
-          <button type="button" className="h-10 rounded-md border px-4 text-sm" onClick={onCancel}>
+          <Button type="button" variant="outline" onClick={onCancel}>
             Annuler
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            className="h-10 rounded-md border bg-slate-900 px-4 text-sm font-medium text-white hover:bg-slate-800"
             onClick={() =>
               onConfirm({
                 includeRestaurants,
@@ -84,7 +84,7 @@ export function DirectionExportModal({ open, restaurantRows, onCancel, onConfirm
             }
           >
             Exporter
-          </button>
+          </Button>
         </div>
       </div>
     </div>

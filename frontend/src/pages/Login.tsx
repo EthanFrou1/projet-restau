@@ -1,9 +1,10 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { login } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import bkLogo from "@/assets/brand/burger-king-logo-2020.svg";
 
 export default function LoginPage({
   onLoggedIn,
@@ -24,11 +25,11 @@ export default function LoginPage({
       const data = await login(email, password);
       onLoggedIn(Boolean(data.must_change_password));
     } catch (e: any) {
-        if (e?.name === "ApiError" && e.status === 401) {
-            setError("Email ou mot de passe incorrect.");
-        } else {
-            setError("Une erreur est survenue lors de la connexion.");
-        }
+      if (e?.name === "ApiError" && e.status === 401) {
+        setError("Email ou mot de passe incorrect.");
+      } else {
+        setError("Une erreur est survenue lors de la connexion.");
+      }
     } finally {
       setLoading(false);
     }
@@ -38,7 +39,13 @@ export default function LoginPage({
     <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
       <div className="w-full max-w-md space-y-4">
         <div className="space-y-1 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Projet Restau</h1>
+          <div className="-mt-10 mb-1 flex justify-center">
+            <div className="flex h-24 w-24 items-center justify-center rounded-full bg-amber-50/90 p-2 shadow-sm">
+              <img src={bkLogo} alt="Burger King" className="h-20 w-20 object-contain" />
+            </div>
+          </div>
+          <h1 className="font-brand text-3xl tracking-tight">Burger King</h1>
+          <p className="text-sm text-muted-foreground">Portail de pilotage de vos restaurants</p>
         </div>
 
         <Card>
@@ -57,7 +64,7 @@ export default function LoginPage({
                   <Input
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Password"
+                    placeholder="Mot de passe"
                     type={showPassword ? "text" : "password"}
                     className="pr-10"
                   />
@@ -73,7 +80,7 @@ export default function LoginPage({
               </div>
 
               <Button className="w-full" disabled={loading} type="submit">
-                {loading ? "Connexion…" : "Se connecter"}
+                {loading ? "Connexion..." : "Se connecter"}
               </Button>
 
               {error && (
@@ -86,7 +93,7 @@ export default function LoginPage({
         </Card>
 
         <div className="text-xs text-muted-foreground text-center">
-          MVP : Auth / Admin / Audit. Le design viendra, la fiabilité d’abord.
+          MVP : Auth / Admin / Audit. Le design viendra, la fiabilité d'abord.
         </div>
       </div>
     </div>

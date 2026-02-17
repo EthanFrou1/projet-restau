@@ -1,4 +1,4 @@
-import { useId, useRef } from "react";
+﻿import { useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -77,10 +77,10 @@ export function ImportModal({
               </Button>
               <div className="min-w-0">
                 <div className="text-lg font-semibold">
-                  {replaceMode ? "Reimport" : "Import"} - {selectedRestaurant.code} ({formatFrDate(modalDate)})
+                  {replaceMode ? "Réimport" : "Import"} - {selectedRestaurant.code} ({formatFrDate(modalDate)})
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {fileCount}/{fileSpecs.length} fichiers selectionnes. Les 8 fichiers sont obligatoires.
+                  {fileCount}/{fileSpecs.length} fichiers sélectionnés. Les 8 fichiers sont obligatoires.
                 </div>
               </div>
             </div>
@@ -105,7 +105,7 @@ export function ImportModal({
               </div>
               <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                 <div
-                  className="h-full rounded-full bg-emerald-600 transition-all"
+                  className="h-full rounded-full bg-teal-700 transition-all"
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>
@@ -149,7 +149,7 @@ export function ImportModal({
               const file = files[spec.id];
               const fileError = fileErrors[spec.id];
               const tileClass = file
-                ? "border-emerald-300 bg-emerald-50/60"
+                ? "border-teal-300 bg-teal-50/45"
                 : fileError
                   ? "border-red-300 bg-red-50/60"
                   : "";
@@ -182,10 +182,10 @@ export function ImportModal({
                   </div>
                   <div
                     className={`text-xs ${
-                      file ? "text-emerald-700" : fileError ? "text-red-700" : "text-muted-foreground"
+                      file ? "text-teal-800" : fileError ? "text-red-700" : "text-muted-foreground"
                     }`}
                   >
-                    {file && `Valide : ${file.name} (${fileSizeLabel(file.size)})`}
+                    {file && `Valide: ${file.name} (${fileSizeLabel(file.size)})`}
                     {!file && fileError}
                     {!file && !fileError && "Aucun fichier"}
                   </div>
@@ -202,7 +202,7 @@ export function ImportModal({
           <Button onClick={onSubmit} disabled={fileCount !== fileSpecs.length || uploading}>
             <span className="inline-flex items-center gap-2">
               <Upload className="h-4 w-4" />
-              {uploading ? "Import en cours..." : "Passer a l'étape suivante"}
+              {uploading ? "Import en cours..." : "Passer à l'étape suivante"}
             </span>
           </Button>
         </div>

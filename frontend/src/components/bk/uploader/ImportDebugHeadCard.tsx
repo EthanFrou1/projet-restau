@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+﻿import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -64,11 +64,11 @@ export function ImportDebugHeadCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="mb-2 text-base">Details des imports (DEV/ADMIN)</CardTitle>
+        <CardTitle className="mb-2 text-base">Détails des imports (DEV/ADMIN)</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="text-sm text-muted-foreground">
-          Visualise rapidement les derniers imports, puis ouvre le detail complet d'un import.
+          Visualise rapidement les derniers imports, puis ouvre le détail complet d'un import.
         </div>
         <div className="grid gap-3 md:grid-cols-4">
           <div className="space-y-1">
@@ -103,8 +103,8 @@ export function ImportDebugHeadCard({
               <TableRow>
                 <TableHead>Rapport</TableHead>
                 <TableHead>Restaurant</TableHead>
-                <TableHead>Importe le</TableHead>
-                <TableHead>Importe par</TableHead>
+                <TableHead>Importé le</TableHead>
+                <TableHead>Importé par</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Commentaire</TableHead>
                 <TableHead className="w-[120px] text-right">Action</TableHead>
@@ -114,7 +114,7 @@ export function ImportDebugHeadCard({
               {rows.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-sm text-muted-foreground">
-                    Aucun import recent.
+                    Aucun import récent.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -131,7 +131,7 @@ export function ImportDebugHeadCard({
                         return full || user.email;
                       })()}
                     </TableCell>
-                    <TableCell className="text-xs">{row.is_reimport ? "Reimport" : "Import"}</TableCell>
+                    <TableCell className="text-xs">{row.is_reimport ? "Réimport" : "Import"}</TableCell>
                     <TableCell className="max-w-[260px] truncate text-xs text-muted-foreground" title={row.comment || ""}>
                       {row.comment || "—"}
                     </TableCell>

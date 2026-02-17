@@ -178,7 +178,7 @@ export function DashboardOverview({
         ? "min-w-[100px] flex-1"
         : "min-w-[56px] flex-1";
   const revenueColumnGapClass = dashScope === "month" ? "gap-2" : "gap-0";
-  const revenuePairGapClass = dashScope === "year" ? "gap-4" : dashScope === "week" ? "gap-4" : "gap-1";
+  const revenuePairGapClass = "gap-4";
   const revenueChartMinWidth =
     dashScope === "month"
       ? Math.max(980, dashTrend.labels.length * 54)
@@ -1251,7 +1251,7 @@ export function DashboardOverview({
                         className={`${metricColumnWidthClass} flex flex-col items-center gap-2`}
                         onMouseEnter={() => setHoveredSalesColumnIndex(idx)}
                       >
-                        <div className="h-[300px] w-full flex items-end justify-center gap-1">
+                        <div className="h-[300px] w-full flex items-end justify-center gap-4">
                           <div className="w-4 flex flex-col items-center justify-end">
                             {n > 0 && (
                               <span className="mb-1 text-[10px] font-medium text-foreground whitespace-nowrap">
@@ -1370,7 +1370,7 @@ export function DashboardOverview({
                         className={`${metricColumnWidthClass} flex flex-col items-center gap-2`}
                         onMouseEnter={() => setHoveredBasketColumnIndex(idx)}
                       >
-                        <div className="h-[300px] w-full flex items-end justify-center gap-1">
+                        <div className="h-[300px] w-full flex items-end justify-center gap-4">
                           <div className="w-4 flex flex-col items-center justify-end">
                             {n > 0 && (
                               <span className="mb-1 text-[10px] font-medium text-foreground whitespace-nowrap">

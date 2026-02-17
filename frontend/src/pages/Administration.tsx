@@ -208,21 +208,21 @@ export function DevPage({
         {isAdmin && (
           <Card className="border-blue-200/70 bg-blue-50/40">
             <CardHeader>
-              <CardTitle className="text-base">Perimetre administrateur</CardTitle>
+              <CardTitle className="text-base">Périmètre administrateur</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-muted-foreground">
               <p>
-                Bonjour {displayName || "admin"}, vous etes administrateur de {adminRestaurants.length} restaurant
+                Bonjour {displayName || "admin"}, vous êtes administrateur de {adminRestaurants.length} restaurant
                 {adminRestaurants.length > 1 ? "s" : ""}: {adminRestaurantNames || "aucun"}.
               </p>
               <p>
-                Vous pouvez creer et supprimer des utilisateurs <span className="font-medium text-foreground">MANAGER</span> et{" "}
-                <span className="font-medium text-foreground">READONLY</span> dans votre perimetre, et gerer leurs associations
+                Vous pouvez créer et supprimer des utilisateurs <span className="font-medium text-foreground">MANAGER</span> et{" "}
+                <span className="font-medium text-foreground">READONLY</span> dans votre périmètre, et gérer leurs associations
                 restaurants.
               </p>
               <p>
-                Vous ne pouvez pas creer/supprimer des comptes <span className="font-medium text-foreground">ADMIN</span> ou{" "}
-                <span className="font-medium text-foreground">DEV</span>, ni gerer des utilisateurs hors de vos restaurants.
+                Vous ne pouvez pas créer/supprimer des comptes <span className="font-medium text-foreground">ADMIN</span> ou{" "}
+                <span className="font-medium text-foreground">DEV</span>, ni gérer des utilisateurs hors de vos restaurants.
               </p>
             </CardContent>
           </Card>
@@ -231,12 +231,12 @@ export function DevPage({
         <div className="grid gap-4 xl:grid-cols-[35%_65%]">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Creation d'utilisateur ({isDev ? "DEV" : "ADMIN"})</CardTitle>
+              <CardTitle className="text-base">Création d'utilisateur ({isDev ? "DEV" : "ADMIN"})</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid gap-3 md:grid-cols-2">
                 <div>
-                  <div className="text-sm md:text-base text-muted-foreground mb-1">Prenom</div>
+                  <div className="text-sm md:text-base text-muted-foreground mb-1">Prénom</div>
                   <input
                     className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                     value={newFirstName}
@@ -263,7 +263,7 @@ export function DevPage({
                   />
                 </div>
                 <div>
-                  <div className="text-sm md:text-base text-muted-foreground mb-1">Role</div>
+                  <div className="text-sm md:text-base text-muted-foreground mb-1">Rôle</div>
                   <select
                     className="w-full rounded-md border bg-background px-3 py-2 text-sm"
                     value={newRole}
@@ -277,12 +277,12 @@ export function DevPage({
                 </div>
               </div>
               <div className="text-xs text-muted-foreground">
-                Le mot de passe temporaire est genere automatiquement et envoye par email.
-                L'utilisateur devra le changer a sa premiere connexion.
+                Le mot de passe temporaire est généré automatiquement et envoyé par email.
+                L'utilisateur devra le changer à sa première connexion.
               </div>
               <div className="flex items-center gap-3">
                 <Button onClick={handleCreateUser} disabled={!canCreateUser}>
-                  Creer
+                  Créer
                 </Button>
               </div>
             </CardContent>
@@ -298,8 +298,8 @@ export function DevPage({
               )}
               <div className="text-sm md:text-base text-muted-foreground">
                 {devUsers.length === 0
-                  ? "Aucun utilisateur charge."
-                  : `${devUsers.length} utilisateur(s) charge(s).`}
+                  ? "Aucun utilisateur chargé."
+                  : `${devUsers.length} utilisateur(s) chargé(s).`}
               </div>
               <input
                 className="w-full rounded-md border bg-background px-3 py-2 text-sm"
@@ -350,7 +350,7 @@ export function DevPage({
                           colSpan={usersTable.getAllLeafColumns().length}
                           className="text-sm text-muted-foreground"
                         >
-                          Aucun utilisateur charge.
+                          Aucun utilisateur chargé.
                         </TableCell>
                       </TableRow>
                     ) : (
@@ -400,9 +400,9 @@ export function DevPage({
                 {assocMsg && <div className="text-sm text-destructive">{assocMsg}</div>}
               </div>
               <div className="text-sm md:text-base text-muted-foreground">
-                Cette liste affiche les associations deja creees entre utilisateurs et restaurants. Si un utilisateur est
-                associe a un restaurant, il peut consulter ses donnees. S'il a le role{" "}
-                <span className="font-medium text-foreground">MANAGER</span>, il peut aussi importer les donnees de ce
+                Cette liste affiche les associations déjà créées entre utilisateurs et restaurants. Si un utilisateur est
+                associé à un restaurant, il peut consulter ses données. S'il a le rôle{" "}
+                <span className="font-medium text-foreground">MANAGER</span>, il peut aussi importer les données de ce
                 restaurant.
               </div>
 
@@ -411,7 +411,7 @@ export function DevPage({
                   <TableHeader>
                     <TableRow>
                       <TableHead>Utilisateur</TableHead>
-                      <TableHead>Role</TableHead>
+                      <TableHead>Rôle</TableHead>
                       <TableHead>Restaurants</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -419,7 +419,7 @@ export function DevPage({
                     {assocUsers.length === 0 ? (
                       <TableRow>
                         <TableCell colSpan={3} className="text-sm text-muted-foreground">
-                          Aucune association trouvee.
+                          Aucune association trouvée.
                         </TableCell>
                       </TableRow>
                     ) : (

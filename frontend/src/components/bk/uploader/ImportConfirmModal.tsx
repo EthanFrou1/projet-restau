@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -84,7 +84,7 @@ export function ImportConfirmModal({
 
   const validationMessage = canConfirm
     ? null
-    : "Les champs RH et Notes satisfaction sont obligatoires et doivent etre numeriques.";
+    : "Les champs RH et notes satisfaction sont obligatoires et doivent être numériques.";
 
   const inputClass =
     "h-10 rounded-md border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { logout, listUsers, createUser, deleteUser } from "@/lib/auth";
@@ -110,18 +111,18 @@ const TAB_TO_PATH: Record<TabValue, string> = {
   overview: "/dashboard",
   data: "/mes-imports",
   "bk-global": "/historiques-imports",
-  "bk-monthly": "/bk-mensuel",
+  "bk-monthly": "/tableau-de-donnees",
   "bk-compare": "/comparaison",
-  executive: "/revue-direction",
+  executive: "/donnees-globales",
   dev: "/administration",
 };
 
 function pathToTab(pathname: string): TabValue {
   if (pathname === "/mes-imports") return "data";
   if (pathname === "/historiques-imports") return "bk-global";
-  if (pathname === "/bk-mensuel") return "bk-monthly";
+  if (pathname === "/bk-mensuel" || pathname === "/tableau-de-donnees") return "bk-monthly";
   if (pathname === "/comparaison") return "bk-compare";
-  if (pathname === "/revue-direction") return "executive";
+  if (pathname === "/revue-direction" || pathname === "/donnees-globales") return "executive";
   if (pathname === "/dev" || pathname === "/administration") return "dev";
   return "overview";
 }
@@ -270,6 +271,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     noRestaurants: boolean;
   }>({ loading: false, missing: [], date: null, error: null, noRestaurants: false });
   const [pendingReimport, setPendingReimport] = useState<ReimportRequest | null>(null);
+  const [executiveExportSignal, setExecutiveExportSignal] = useState(0);
   const activeTab = useMemo(() => pathToTab(location.pathname), [location.pathname]);
 
   async function loadMe() {
@@ -298,7 +300,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     return (
       <Badge
         variant="outline"
-        className="border-slate-500/40 bg-gradient-to-b from-slate-800 via-slate-700 to-zinc-800 text-slate-100 h-8 px-4 py-2"
+        className="h-8 border-amber-100/35 bg-gradient-to-b from-[#4b1e12] via-[#5a2516] to-[#712b10] px-4 py-2 text-amber-50"
       >
         {me.role}
       </Badge>
@@ -1502,6 +1504,16 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
               activeTabLabel={activeTabLabel}
               activeTabDescription={activeTabDescription}
               onLogout={handleLogout}
+              headerControls={
+                activeTab === "executive" ? (
+                  <Button
+                    type="button"
+                    onClick={() => setExecutiveExportSignal((prev) => prev + 1)}
+                  >
+                    Exporter en PDF
+                  </Button>
+                ) : null
+              }
             />
 
             {activeTab === "overview" ? (
@@ -1690,7 +1702,11 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
 
             <MonthlyPage visible={canViewGlobalBk} restaurants={restaurants} />
             <ComparisonPage visible={canViewGlobalBk} restaurants={restaurants} />
-            <DirectionPage visible={canViewGlobalBk} restaurants={restaurants} />
+            <DirectionPage
+              visible={canViewGlobalBk}
+              restaurants={restaurants}
+              openExportSignal={executiveExportSignal}
+            />
 
             <DevPage
               visible={canAccessDev}
