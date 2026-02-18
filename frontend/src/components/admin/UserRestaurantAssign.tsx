@@ -52,7 +52,8 @@ export function UserRestaurantAssign({ users, assocUsers, onSaved }: Props) {
       const data = await listRestaurants();
       setRestaurants(data);
       setPage(1);
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const e = error as { message?: string };
       setMsg(`❌ ${e?.message ?? "Erreur"}`);
     }
   }
@@ -81,7 +82,8 @@ export function UserRestaurantAssign({ users, assocUsers, onSaved }: Props) {
       await setUserRestaurants(Number(selectedUserId), selectedCodes);
       onSaved?.(Number(selectedUserId), selectedCodes);
       setMsg("✅ Associations mises à jour.");
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const e = error as { message?: string };
       setMsg(`❌ ${e?.message ?? "Erreur"}`);
     } finally {
       setSaveBusy(false);

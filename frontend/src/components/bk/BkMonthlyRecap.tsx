@@ -125,7 +125,8 @@ export function BkMonthlyRecap({ restaurants }: Props) {
 
       const data = await apiFetch<MonthlyItem[]>(`/reports/bk/monthly?${params.toString()}`);
       setItems(data);
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const e = error as { message?: string };
       setErr(e?.message ?? "Erreur chargement recap");
     } finally {
       setLoading(false);

@@ -38,6 +38,11 @@ export default function ChangePasswordPage({ onDone }: { onDone: () => void }) {
     confirmPassword.length >= 8 &&
     newPassword === confirmPassword;
 
+  type PasswordChangeError = {
+    status?: number;
+    detail?: { detail?: unknown; message?: string };
+  };
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -49,12 +54,17 @@ export default function ChangePasswordPage({ onDone }: { onDone: () => void }) {
         new_password_confirm: confirmPassword,
       });
       onDone();
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const e = error as PasswordChangeError;
       const detail = e?.detail?.detail;
+      const detailMessage =
+        detail && typeof detail === "object" && "message" in detail && typeof detail.message === "string"
+          ? detail.message
+          : null;
       if (typeof detail === "string") {
         setError(detail);
-      } else if (detail?.message) {
-        setError(detail.message);
+      } else if (detailMessage) {
+        setError(detailMessage);
       } else if (e?.status === 401) {
         setError("Mot de passe temporaire invalide.");
       } else {

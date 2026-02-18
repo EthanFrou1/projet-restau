@@ -2,9 +2,9 @@
 
 export class ApiError extends Error {
   status: number;
-  detail?: any;
+  detail?: unknown;
 
-  constructor(message: string, status: number, detail?: any) {
+  constructor(message: string, status: number, detail?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
@@ -12,7 +12,9 @@ export class ApiError extends Error {
   }
 }
 
-export function parseApiError(res: Response, detail: any): ApiError {
+type ApiErrorPayload = { detail?: unknown } & Record<string, unknown>;
+
+export function parseApiError(res: Response, detail: unknown): ApiError {
   const status = res.status;
 
   // Cas auth
@@ -31,7 +33,7 @@ export function parseApiError(res: Response, detail: any): ApiError {
 
   // FastAPI HTTPException standard
   if (detail && typeof detail === "object" && "detail" in detail) {
-    const d = (detail as any).detail;
+    const d = (detail as ApiErrorPayload).detail;
     if (typeof d === "string") {
       return new ApiError(d, status, detail);
     }

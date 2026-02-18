@@ -47,11 +47,15 @@ export function ImportModal({
   onSubmit,
   onFileSelect,
 }: Props) {
-  if (!open || !selectedRestaurant) return null;
-  if (typeof document === "undefined") return null;
-
   const folderInputId = useId();
   const folderInputRef = useRef<HTMLInputElement | null>(null);
+  const directoryInputProps: Record<"webkitdirectory" | "directory", string> = {
+    webkitdirectory: "",
+    directory: "",
+  };
+
+  if (!open || !selectedRestaurant) return null;
+  if (typeof document === "undefined") return null;
 
   return createPortal(
     <div
@@ -117,7 +121,7 @@ export function ImportModal({
               type="file"
               className="hidden"
               multiple
-              {...({ webkitdirectory: "", directory: "" } as any)}
+              {...directoryInputProps}
               onChange={(e) => {
                 onFolderSelect(e.target.files);
                 e.currentTarget.value = "";

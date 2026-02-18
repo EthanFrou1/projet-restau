@@ -19,13 +19,22 @@ export function RestaurantManager() {
       const data = await listRestaurants();
       setRestaurants(data);
       setPage(1);
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const e = error as { message?: string };
       setMsg(`Erreur: ${e?.message ?? "Erreur"}`);
     }
   }
 
   useEffect(() => {
-    loadRestaurants();
+    void listRestaurants()
+      .then((data) => {
+        setRestaurants(data);
+        setPage(1);
+      })
+      .catch((error: unknown) => {
+        const e = error as { message?: string };
+        setMsg(`Erreur: ${e?.message ?? "Erreur"}`);
+      });
   }, []);
 
   async function create() {
@@ -42,7 +51,8 @@ export function RestaurantManager() {
       setCode("");
       setName("");
       await loadRestaurants();
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const e = error as { message?: string };
       setMsg(`Erreur: ${e?.message ?? "Erreur"}`);
     }
   }

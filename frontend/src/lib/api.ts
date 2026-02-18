@@ -61,10 +61,12 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
 
   if (!res.ok) {
-  let detail: any = null;
+  let detail: unknown = null;
   try {
     detail = await res.json();
-  } catch {}
+  } catch {
+    detail = null;
+  }
 
    throw parseApiError(res, detail);
  }

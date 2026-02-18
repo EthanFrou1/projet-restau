@@ -2,7 +2,7 @@ import { useState } from "react";
 import { logout as apiLogout } from "@/lib/auth";
 
 export function useAuth() {
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<unknown>(null);
 
   async function logout() {
     try {

@@ -77,7 +77,7 @@ function toIsoDate(value: Date) {
   return local.toISOString().slice(0, 10);
 }
 
-function num(value: any): number {
+function num(value: unknown): number {
   if (value === null || value === undefined) return 0;
   if (typeof value === "number") return value;
   const parsed = Number(String(value).replace(",", "."));
@@ -261,7 +261,8 @@ export function BkComparison({ restaurants }: { restaurants: Restaurant[] }) {
         setSummaryA(a);
         setSummaryB(b);
       }
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const e = error as { message?: string };
       setErr(e?.message ?? "Erreur comparaison");
       setSummaryA(null);
       setSummaryB(null);

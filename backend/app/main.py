@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.core.seed import seed_dev_user_if_needed
@@ -9,6 +9,8 @@ from app.api.debug import router as debug_router
 from app.api.audit import router as audit_router
 from app.api.bk_reports import router as bk_reports_router
 from app.api.restaurants import router as restaurants_router
+from app.api.auth_deps import require_roles
+from app.core.roles import Role
 import os
 
 import app.models
@@ -37,13 +39,13 @@ def health():
     return {"status": "ok"}
 
 @app.get("/db-check")
-def db_check():
+def db_check(_user=Depends(require_roles([Role.DEV]))):
     with engine.connect() as conn:
         result = conn.execute(text("SELECT 1"))
         return {"db": "ok", "result": result.scalar()}
 
 @app.get("/tables")
-def tables():
+def tables(_user=Depends(require_roles([Role.DEV]))):
     with engine.connect() as conn:
         rows = conn.execute(text("""
             SELECT tablename

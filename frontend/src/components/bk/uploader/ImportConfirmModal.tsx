@@ -66,8 +66,11 @@ export function ImportConfirmModal({
 
   useEffect(() => {
     if (!open) return;
-    setCommentDraft(initialCommentDraft);
-    setExtraKpiDraft(initialExtraKpiDraft);
+    const timeoutId = window.setTimeout(() => {
+      setCommentDraft(initialCommentDraft);
+      setExtraKpiDraft(initialExtraKpiDraft);
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [open, initialCommentDraft, initialExtraKpiDraft]);
 
   const canConfirm = useMemo(() => {

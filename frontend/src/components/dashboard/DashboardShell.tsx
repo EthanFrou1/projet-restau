@@ -20,6 +20,18 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { StatusDialog } from "@/components/ui/status-dialog";
 import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
+import { OverviewFilters } from "@/components/dashboard/shell/OverviewFilters";
+import { TAB_TO_PATH, compactMoneyFmt, intFmt, moneyFmt, pathToTab, pctFmt } from "@/components/dashboard/shell/constants";
+import {
+  formatIsoDayMonth,
+  formatIsoDayMonthYear,
+  getIsoWeekNumber,
+  getIsoWeekStart,
+  isoWeeksInYear,
+  mergeComment,
+  toIsoDate,
+} from "@/components/dashboard/shell/utils";
+import type { DashScope, Me, MonthlyItem, ReportListItem, Restaurant, TabValue } from "@/components/dashboard/shell/types";
 import { ComparisonPage } from "@/pages/Comparaison";
 import { DevPage } from "@/pages/Administration";
 import { HistoryPage } from "@/pages/HistoriquesImports";
@@ -28,175 +40,9 @@ import { MonthlyPage } from "@/pages/BkMensuel";
 import { OverviewPage } from "@/pages/Dashboard";
 import { DirectionPage } from "@/pages/RevueDirection";
 import type { ReimportRequest } from "@/components/bk/uploader/types";
+import type { AssocUser, DevUser, UserRole } from "@/components/admin/types";
 
-type Me = {
-  id: number;
-  email: string;
-  role: string;
-  is_active: boolean;
-  first_name?: string | null;
-  last_name?: string | null;
-};
-type MonthlyItem = {
-  id: number;
-  restaurant_code: string;
-  report_date: string;
-  created_at: string;
-  comment?: string | null;
-  comment_n1?: string | null;
-  ca_net_total: number;
-  ca_ttc_total: number;
-  marge?: number;
-  marge_n1?: number;
-  taux_pertes?: number;
-  taux_pertes_n1?: number;
-  pertes_montant?: number;
-  pertes_montant_n1?: number;
-  tac_total: number;
-  kpi: {
-    n1_ht: number | null;
-    var_n1: number | null;
-    prev_ht: number | null;
-    ca_real: number | null;
-    clients: number | null;
-    clients_n1: number | null;
-    ca_delivery: number | null;
-    ca_delivery_n1: number | null;
-    client_delivery: number | null;
-    client_delivery_n1: number | null;
-    ca_click_collect: number | null;
-    cnc_n1: number | null;
-    client_click_collect: number | null;
-    client_n1: number | null;
-    cash_diff: number | null;
-    heures_personnel: number | null;
-    heures_personnel_n1: number | null;
-    heures_travail: number | null;
-    heures_travail_n1: number | null;
-    taux_horaire: number | null;
-    taux_horaire_n1: number | null;
-    osat_score: number | null;
-    osat_score_n1: number | null;
-    gxi_score: number | null;
-    gxi_score_n1: number | null;
-    google_score: number | null;
-    google_score_n1: number | null;
-  } | null;
-};
-
-type Restaurant = {
-  id: number;
-  code: string;
-  name: string;
-  can_import?: boolean;
-};
-type ReportListItem = {
-  id: number;
-  restaurant_code: string;
-  report_date: string;
-  created_at: string;
-};
-
-type TabValue =
-  | "overview"
-  | "data"
-  | "bk-global"
-  | "bk-monthly"
-  | "bk-compare"
-  | "executive"
-  | "dev";
-type DashScope = "year" | "month" | "week" | "day";
-
-const TAB_TO_PATH: Record<TabValue, string> = {
-  overview: "/dashboard",
-  data: "/mes-imports",
-  "bk-global": "/historiques-imports",
-  "bk-monthly": "/tableau-de-donnees",
-  "bk-compare": "/comparaison",
-  executive: "/donnees-globales",
-  dev: "/administration",
-};
-
-function pathToTab(pathname: string): TabValue {
-  if (pathname === "/mes-imports") return "data";
-  if (pathname === "/historiques-imports") return "bk-global";
-  if (pathname === "/bk-mensuel" || pathname === "/tableau-de-donnees") return "bk-monthly";
-  if (pathname === "/comparaison") return "bk-compare";
-  if (pathname === "/revue-direction" || pathname === "/donnees-globales") return "executive";
-  if (pathname === "/dev" || pathname === "/administration") return "dev";
-  return "overview";
-}
-
-const moneyFmt = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
-const compactMoneyFmt = new Intl.NumberFormat("fr-FR", {
-  style: "currency",
-  currency: "EUR",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
-const intFmt = new Intl.NumberFormat("fr-FR");
-const pctFmt = new Intl.NumberFormat("fr-FR", {
-  style: "percent",
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-});
-
-function toIsoDate(value: Date) {
-  const offset = value.getTimezoneOffset();
-  const local = new Date(value.getTime() - offset * 60_000);
-  return local.toISOString().slice(0, 10);
-}
-
-function getIsoWeekNumber(value: Date): number {
-  const date = new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
-  const day = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - day);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil((((date.getTime() - yearStart.getTime()) / 86_400_000) + 1) / 7);
-}
-
-function getIsoWeekStart(year: number, week: number): Date {
-  const jan4 = new Date(Date.UTC(year, 0, 4));
-  const jan4Day = jan4.getUTCDay() || 7;
-  const mondayWeek1 = new Date(jan4);
-  mondayWeek1.setUTCDate(jan4.getUTCDate() - jan4Day + 1);
-  const start = new Date(mondayWeek1);
-  start.setUTCDate(mondayWeek1.getUTCDate() + (week - 1) * 7);
-  return start;
-}
-
-function isoWeeksInYear(year: number): number {
-  return getIsoWeekNumber(new Date(Date.UTC(year, 11, 28)));
-}
-
-function formatIsoDayMonth(iso: string): string {
-  const [year, month, day] = iso.split("-").map(Number);
-  return new Date(year, (month || 1) - 1, day || 1).toLocaleDateString("fr-FR", {
-    day: "2-digit",
-    month: "2-digit",
-  });
-}
-
-function formatIsoDayMonthYear(iso: string): string {
-  const [year, month, day] = iso.split("-").map(Number);
-  return new Date(year, (month || 1) - 1, day || 1).toLocaleDateString("fr-FR");
-}
-
-function normalizeComment(value?: string | null): string | null {
-  const cleaned = (value ?? "").replace(/\s+/g, " ").trim();
-  return cleaned.length > 0 ? cleaned : null;
-}
-
-function mergeComment(base?: string | null, incoming?: string | null): string | null {
-  const next = normalizeComment(incoming);
-  if (!next) return normalizeComment(base);
-  const current = normalizeComment(base);
-  if (!current) return next;
-  if (current === next) return current;
-  const parts = current.split(" | ").map((entry) => entry.trim()).filter(Boolean);
-  if (parts.includes(next)) return current;
-  return `${current} | ${next}`;
-}
+type MessageError = { message?: string };
 
 export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => void }) {
   const location = useLocation();
@@ -205,19 +51,12 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [devUsers, setDevUsers] = useState<Array<{
-    id: number;
-    email: string;
-    role: string;
-    is_active: boolean;
-    first_name?: string | null;
-    last_name?: string | null;
-  }>>([]);
+  const [devUsers, setDevUsers] = useState<DevUser[]>([]);
   const [devUsersLoading, setDevUsersLoading] = useState(false);
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState<"ADMIN" | "MANAGER" | "READONLY" | "DEV">("READONLY");
+  const [newRole, setNewRole] = useState<UserRole>("READONLY");
   const [createUserDialog, setCreateUserDialog] = useState<{
     open: boolean;
     kind: "success" | "error";
@@ -237,17 +76,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     nextCodes: string[];
   } | null>(null);
   const [assocBusy, setAssocBusy] = useState(false);
-  const [assocUsers, setAssocUsers] = useState<
-    Array<{
-      id: number;
-      email: string;
-      role: string;
-      is_active: boolean;
-      first_name?: string | null;
-      last_name?: string | null;
-      restaurants: Array<{ id: number; code: string; name: string }>;
-    }>
-  >([]);
+  const [assocUsers, setAssocUsers] = useState<AssocUser[]>([]);
   const [assocLoading, setAssocLoading] = useState(false);
   const [assocMsg, setAssocMsg] = useState<string | null>(null);
   const [assocUsersPage, setAssocUsersPage] = useState(1);
@@ -287,7 +116,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         await loadMe();
         const rs = await getMyRestaurants();
         setRestaurants(rs);
-      } catch (e: any) {
+      } catch (error: unknown) {
+        const e = error as MessageError;
         setErr(e?.message ?? "Erreur");
       } finally {
         setLoading(false);
@@ -384,8 +214,6 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     }
     return "";
   }, [activeTab, isAdmin]);
-  const headerFilterSelectClass = "h-10 w-full rounded-md border bg-background px-3 py-2 text-sm";
-
   async function loadDevUsers() {
     setDevUsersLoading(true);
     try {
@@ -403,7 +231,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       const data = await listUsersWithRestaurants();
       setAssocUsers(data);
       setAssocUsersPage(1);
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const e = error as MessageError;
       setAssocMsg(e?.message ?? "Erreur chargement associations");
     } finally {
       setAssocLoading(false);
@@ -480,7 +309,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
           const data = await fetchMonthly(yearNum, monthNum);
           setDashItems(data);
         }
-      } catch (e: any) {
+      } catch (error: unknown) {
+        const e = error as MessageError;
         setDashErr(e?.message ?? "Erreur chargement dashboard");
       } finally {
         setDashLoading(false);
@@ -514,7 +344,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       const reported = new Set(data.map((r) => r.restaurant_code));
       const missing = actionableRestaurants.filter((r) => !reported.has(r.code));
       setDailyStatus({ loading: false, missing, date: today, error: null, noRestaurants: false });
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const e = error as MessageError;
       setDailyStatus({
         loading: false,
         missing: [],
@@ -1405,7 +1236,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       setNewEmail("");
       setNewRole("READONLY");
       await loadDevUsers();
-    } catch (e: any) {
+    } catch (error: unknown) {
+      const e = error as MessageError;
       const rawMessage = String(e?.message ?? "Erreur création utilisateur");
       const localizedMessage =
         rawMessage === "Email already exists"
@@ -1479,7 +1311,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
             try {
               await setUserRestaurants(confirmRemoveAssoc.userId, confirmRemoveAssoc.nextCodes);
               updateAssocUser(confirmRemoveAssoc.userId, confirmRemoveAssoc.nextCodes);
-            } catch (e: any) {
+            } catch (error: unknown) {
+              const e = error as MessageError;
               setAssocMsg(e?.message ?? "Erreur suppression association");
             } finally {
               setAssocBusy(false);
@@ -1517,122 +1350,27 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
             />
 
             {activeTab === "overview" ? (
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-end gap-2">
-                  <div className="w-full space-y-1 sm:w-[140px]">
-                    <div className="text-xs text-muted-foreground">Période</div>
-                    <select
-                      className={headerFilterSelectClass}
-                      value={dashScope}
-                      onChange={(e) => setDashScope(e.target.value as DashScope)}
-                    >
-                      <option value="year">Année</option>
-                      <option value="month">Mois</option>
-                      <option value="week">Semaine</option>
-                      <option value="day">Jour</option>
-                    </select>
-                  </div>
-                  <div className="w-full space-y-1 sm:w-[120px]">
-                    <div className="text-xs text-muted-foreground">Année</div>
-                    <select
-                      className={headerFilterSelectClass}
-                      value={dashYear}
-                      onChange={(e) => setDashYear(e.target.value)}
-                    >
-                      {yearOptions.map((y) => (
-                        <option key={y} value={String(y)}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {dashScope === "month" || dashScope === "day" ? (
-                    <div className="w-full space-y-1 sm:w-[160px]">
-                      <div className="text-xs text-muted-foreground">Mois</div>
-                      <select
-                        className={headerFilterSelectClass}
-                        value={dashMonth}
-                        onChange={(e) => setDashMonth(e.target.value)}
-                      >
-                        {Array.from({ length: 12 }, (_, i) => {
-                          const label = new Intl.DateTimeFormat("fr-FR", { month: "long" }).format(
-                            new Date(2000, i, 1)
-                          );
-                          const value = String(i + 1).padStart(2, "0");
-                          return (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
-                  ) : null}
-                  {dashScope === "week" ? (
-                    <div className="w-full space-y-1 sm:w-[120px]">
-                      <div className="text-xs text-muted-foreground">Semaine</div>
-                      <select
-                        className={headerFilterSelectClass}
-                        value={dashWeek}
-                        onChange={(e) => setDashWeek(e.target.value)}
-                      >
-                        {weekOptions.map((week) => (
-                          <option key={week} value={week}>
-                            S{week}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                  {dashScope === "day" ? (
-                    <div className="w-full space-y-1 sm:w-[95px]">
-                      <div className="text-xs text-muted-foreground">Du</div>
-                      <select
-                        className={headerFilterSelectClass}
-                        value={dashDayFrom}
-                        onChange={(e) => setDashDayFrom(e.target.value)}
-                      >
-                        {dayOptions.map((day) => (
-                          <option key={day} value={day}>
-                            {day}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                  {dashScope === "day" ? (
-                    <div className="w-full space-y-1 sm:w-[95px]">
-                      <div className="text-xs text-muted-foreground">Au</div>
-                      <select
-                        className={headerFilterSelectClass}
-                        value={dashDayTo}
-                        onChange={(e) => setDashDayTo(e.target.value)}
-                      >
-                        {dayToOptions.map((day) => (
-                          <option key={day} value={day}>
-                            {day}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  ) : null}
-                  <div className="w-full space-y-1 sm:w-[260px]">
-                    <div className="text-xs text-muted-foreground">Restaurant</div>
-                    <select
-                      className={headerFilterSelectClass}
-                      value={dashRestaurant}
-                      onChange={(e) => setDashRestaurant(e.target.value)}
-                    >
-                      <option value="">Tous les magasins</option>
-                      {restaurants.map((r) => (
-                        <option key={r.id} value={r.code}>
-                          {r.code} - {r.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              </div>
+              <OverviewFilters
+                dashScope={dashScope}
+                dashYear={dashYear}
+                dashMonth={dashMonth}
+                dashWeek={dashWeek}
+                dashDayFrom={dashDayFrom}
+                dashDayTo={dashDayTo}
+                dashRestaurant={dashRestaurant}
+                yearOptions={yearOptions}
+                weekOptions={weekOptions}
+                dayOptions={dayOptions}
+                dayToOptions={dayToOptions}
+                restaurants={restaurants}
+                onDashScopeChange={setDashScope}
+                onDashYearChange={setDashYear}
+                onDashMonthChange={setDashMonth}
+                onDashWeekChange={setDashWeek}
+                onDashDayFromChange={setDashDayFrom}
+                onDashDayToChange={setDashDayTo}
+                onDashRestaurantChange={setDashRestaurant}
+              />
             ) : null}
 
             {err && (

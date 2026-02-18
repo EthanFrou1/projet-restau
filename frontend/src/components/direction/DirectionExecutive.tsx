@@ -46,7 +46,8 @@ export function DirectionExecutive({ restaurants, openExportSignal = 0 }: Props)
           )
         );
         setItems(chunks.flat());
-      } catch (e: any) {
+      } catch (error: unknown) {
+        const e = error as { message?: string };
         setError(e?.message ?? "Erreur chargement revue direction");
       } finally {
         setLoading(false);

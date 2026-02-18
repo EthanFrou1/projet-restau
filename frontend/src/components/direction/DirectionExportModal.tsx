@@ -27,8 +27,11 @@ export function DirectionExportModal({ open, restaurantRows, onCancel, onConfirm
 
   useEffect(() => {
     if (!open) return;
-    setIncludeRestaurants(true);
-    setSelectedRestaurants(restaurants.map((restaurant) => restaurant.key));
+    const timeoutId = window.setTimeout(() => {
+      setIncludeRestaurants(true);
+      setSelectedRestaurants(restaurants.map((restaurant) => restaurant.key));
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
   }, [open, restaurants]);
 
   if (!open) return null;

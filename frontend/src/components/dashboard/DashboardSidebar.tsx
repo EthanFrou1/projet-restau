@@ -45,11 +45,7 @@ export function DashboardSidebar({
         type="button"
         variant="ghost"
         size="icon"
-        className={`absolute top-6 z-30 hidden h-9 w-9 border border-amber-200/70 text-amber-50 shadow-md hover:text-amber-50 md:inline-flex ${
-          collapsed
-            ? "-right-16 rounded-md bg-[#3f1b10] hover:bg-[#4a2114]"
-            : "-right-4 bg-[#5a2516] hover:bg-[#6a2f1e]"
-        }`}
+        className="absolute top-6 z-30 hidden h-9 w-9 border border-amber-200/70 text-amber-50 shadow-md hover:text-amber-50 md:inline-flex -right-4 bg-[#5a2516] hover:bg-[#6a2f1e]"
         onClick={() => setCollapsed((prev) => !prev)}
         aria-label={collapsed ? "Afficher la sidebar" : "Réduire la sidebar"}
         title={collapsed ? "Afficher la sidebar" : "Réduire la sidebar"}
@@ -57,7 +53,7 @@ export function DashboardSidebar({
         {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
       </Button>
 
-      <div className="flex h-full flex-col p-4 md:p-6">
+      <div className={`flex h-full flex-col p-4 ${collapsed ? "pt-16 md:pt-20" : "pt-4 md:pt-6"}`}>
         <div className="flex items-start gap-2">
           <div className="space-y-2">
             {collapsed ? (
