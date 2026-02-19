@@ -4,9 +4,15 @@ import { Info } from "lucide-react";
 type Props = {
   content: ReactNode;
   className?: string;
+  side?: "top" | "bottom";
 };
 
-export function InfoTooltip({ content, className }: Props) {
+export function InfoTooltip({ content, className, side = "bottom" }: Props) {
+  const placementClass =
+    side === "top"
+      ? "bottom-full mb-2 -translate-x-1/2"
+      : "top-full mt-2 -translate-x-1/2";
+
   return (
     <span className={`group relative inline-flex ${className ?? ""}`}>
       <button
@@ -18,11 +24,10 @@ export function InfoTooltip({ content, className }: Props) {
       </button>
       <span
         role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-md border bg-popover p-2 text-xs text-popover-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        className={`pointer-events-none absolute left-1/2 z-50 w-64 rounded-md border bg-popover p-2 text-xs text-popover-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 ${placementClass}`}
       >
         {content}
       </span>
     </span>
   );
 }
-

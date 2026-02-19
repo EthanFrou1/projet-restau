@@ -159,7 +159,10 @@ export function ImportConfirmModal({
               <label className="space-y-1">
                 <div className="flex items-center gap-1 text-xs text-muted-foreground">
                   <span>Heures formation (coût complémentaire)</span>
-                  <InfoTooltip content="Coût additionnel saisi manuellement (ex: heures de formation, renfort ponctuel, autre coût RH complémentaire)." />
+                  <InfoTooltip
+                    side="top"
+                    content="Coût additionnel saisi manuellement (ex: heures de formation, renfort ponctuel, autre coût RH complémentaire)."
+                  />
                 </div>
                 <input
                   className={`${inputClass} w-full`}
