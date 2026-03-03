@@ -123,8 +123,8 @@ export function BkMonthlyRecap({ restaurants }: Props) {
       params.set("month", String(monthNum));
       if (finalRestaurantCode) params.set("restaurant_code", finalRestaurantCode);
 
-      const data = await apiFetch<MonthlyItem[]>(`/reports/bk/monthly?${params.toString()}`);
-      setItems(data);
+      const data = await apiFetch<{ items: MonthlyItem[] }>(`/reports/bk/monthly?${params.toString()}`);
+      setItems(data.items);
     } catch (error: unknown) {
       const e = error as { message?: string };
       setErr(e?.message ?? "Erreur chargement recap");

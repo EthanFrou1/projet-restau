@@ -54,6 +54,32 @@ export type MonthlyItem = {
   } | null;
 };
 
+export type PeriodN1 = {
+  ca: number;
+  clients: number;
+  ca_delivery: number;
+  ca_click_collect: number;
+  marge: number;
+  pertes_montant: number;
+};
+
+export type PrevItem = {
+  restaurant_code: string;
+  report_date: string;
+  ca: number;
+  clients: number;
+  ca_delivery: number;
+  ca_click_collect: number;
+  marge: number;
+  pertes_montant: number;
+};
+
+export type MonthlyResponse = {
+  items: MonthlyItem[];
+  period_n1: PeriodN1;
+  prev_items: PrevItem[];
+};
+
 export type Restaurant = {
   id: number;
   code: string;

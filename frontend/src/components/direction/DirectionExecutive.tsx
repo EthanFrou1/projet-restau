@@ -42,10 +42,10 @@ export function DirectionExecutive({ restaurants, openExportSignal = 0 }: Props)
         // On charge les 12 mois pour reconstruire la vue annuelle côté client.
         const chunks = await Promise.all(
           Array.from({ length: 12 }, (_, monthIdx) =>
-            apiFetch<MonthlyItem[]>(`/reports/bk/monthly?year=${year}&month=${monthIdx + 1}`)
+            apiFetch<{ items: MonthlyItem[] }>(`/reports/bk/monthly?year=${year}&month=${monthIdx + 1}`)
           )
         );
-        setItems(chunks.flat());
+        setItems(chunks.flatMap((r) => r.items));
       } catch (error: unknown) {
         const e = error as { message?: string };
         setError(e?.message ?? "Erreur chargement revue direction");

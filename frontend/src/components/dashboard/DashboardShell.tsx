@@ -31,7 +31,7 @@ import {
   mergeComment,
   toIsoDate,
 } from "@/components/dashboard/shell/utils";
-import type { DashScope, Me, MonthlyItem, ReportListItem, Restaurant, TabValue } from "@/components/dashboard/shell/types";
+import type { DashScope, Me, MonthlyItem, MonthlyResponse, PeriodN1, PrevItem, ReportListItem, Restaurant, TabValue } from "@/components/dashboard/shell/types";
 import { ComparisonPage } from "@/pages/Comparaison";
 import { DevPage } from "@/pages/Administration";
 import { HistoryPage } from "@/pages/HistoriquesImports";
@@ -88,6 +88,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   const [dashDayTo, setDashDayTo] = useState(String(new Date().getDate()).padStart(2, "0"));
   const [dashRestaurant, setDashRestaurant] = useState("");
   const [dashItems, setDashItems] = useState<MonthlyItem[]>([]);
+  const [dashPeriodN1List, setDashPeriodN1List] = useState<PeriodN1[]>([]);
+  const [dashPrevItems, setDashPrevItems] = useState<PrevItem[]>([]);
   const [dashRefreshTick, setDashRefreshTick] = useState(0);
   const [dashLoading, setDashLoading] = useState(false);
   const [dashErr, setDashErr] = useState<string | null>(null);
@@ -294,7 +296,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       params.set("year", String(year));
       params.set("month", String(month));
       if (restaurantCode) params.set("restaurant_code", restaurantCode);
-      return apiFetch<MonthlyItem[]>(`/reports/bk/monthly?${params.toString()}`);
+      return apiFetch<MonthlyResponse>(`/reports/bk/monthly?${params.toString()}`);
     }
 
     (async () => {
@@ -304,10 +306,14 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         if (dashScope === "year" || dashScope === "week") {
           const months = Array.from({ length: 12 }, (_, i) => i + 1);
           const chunks = await Promise.all(months.map((m) => fetchMonthly(yearNum, m)));
-          setDashItems(chunks.flat());
+          setDashItems(chunks.flatMap((r) => r.items));
+          setDashPeriodN1List(chunks.map((r) => r.period_n1));
+          setDashPrevItems(chunks.flatMap((r) => r.prev_items));
         } else {
           const data = await fetchMonthly(yearNum, monthNum);
-          setDashItems(data);
+          setDashItems(data.items);
+          setDashPeriodN1List([data.period_n1]);
+          setDashPrevItems(data.prev_items);
         }
       } catch (error: unknown) {
         const e = error as MessageError;
@@ -491,38 +497,76 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
 
   const dashTotals = useMemo(() => {
     let ca = 0;
-    let caN1 = 0;
     let clients = 0;
-    let clientsN1 = 0;
     let caDelivery = 0;
-    let caDeliveryN1 = 0;
     let caCnc = 0;
-    let caCncN1 = 0;
-    let caMagasinN1 = 0;
     let marge = 0;
-    let margeN1 = 0;
     let pertesMontant = 0;
-    let pertesMontantN1 = 0;
     for (const item of scopedDashItems) {
       const kpi = item.kpi;
-      const caReal = kpi?.ca_real ?? item.ca_net_total ?? 0;
-      ca += caReal;
-      caN1 += kpi?.n1_ht ?? 0;
+      ca += kpi?.ca_real ?? item.ca_net_total ?? 0;
       clients += kpi?.clients ?? item.tac_total ?? 0;
-      clientsN1 += kpi?.clients_n1 ?? 0;
       caDelivery += kpi?.ca_delivery ?? 0;
-      caDeliveryN1 += kpi?.ca_delivery_n1 ?? 0;
       caCnc += kpi?.ca_click_collect ?? 0;
-      caCncN1 += kpi?.cnc_n1 ?? 0;
       marge += item.marge ?? 0;
-      margeN1 += item.marge_n1 ?? 0;
       pertesMontant += item.pertes_montant ?? 0;
-      pertesMontantN1 += item.pertes_montant_n1 ?? 0;
     }
+
+    // N-1 selon le scope :
+    // - mois/année : totaux N-1 du mois/année entier (period_n1)
+    // - semaine : totaux N-1 de la même semaine ISO en N-1 (prev_items filtrés)
+    // - jour : comparaison jour par jour (kpi.n1_ht)
+    let caN1 = 0;
+    let clientsN1 = 0;
+    let caDeliveryN1 = 0;
+    let caCncN1 = 0;
+    let margeN1 = 0;
+    let pertesMontantN1 = 0;
+    if (dashScope === "month" || dashScope === "year") {
+      for (const p of dashPeriodN1List) {
+        caN1 += p.ca;
+        clientsN1 += p.clients;
+        caDeliveryN1 += p.ca_delivery;
+        caCncN1 += p.ca_click_collect;
+        margeN1 += p.marge;
+        pertesMontantN1 += p.pertes_montant;
+      }
+    } else if (dashScope === "week" && selectedWeekRange) {
+      // Calculer la plage de la même semaine ISO en N-1
+      const prevYear = Number(dashYear) - 1;
+      const weekNum = Number(dashWeek);
+      const prevWeekStart = getIsoWeekStart(prevYear, weekNum);
+      const prevWeekEnd = new Date(prevWeekStart);
+      prevWeekEnd.setUTCDate(prevWeekStart.getUTCDate() + 6);
+      const prevStartIso = prevWeekStart.toISOString().slice(0, 10);
+      const prevEndIso = prevWeekEnd.toISOString().slice(0, 10);
+      for (const p of dashPrevItems) {
+        if (!p || !p.report_date) continue;
+        if (p.report_date >= prevStartIso && p.report_date <= prevEndIso) {
+          caN1 += p.ca;
+          clientsN1 += p.clients;
+          caDeliveryN1 += p.ca_delivery;
+          caCncN1 += p.ca_click_collect;
+          margeN1 += p.marge;
+          pertesMontantN1 += p.pertes_montant;
+        }
+      }
+    } else {
+      for (const item of scopedDashItems) {
+        const kpi = item.kpi;
+        caN1 += kpi?.n1_ht ?? 0;
+        clientsN1 += kpi?.clients_n1 ?? 0;
+        caDeliveryN1 += kpi?.ca_delivery_n1 ?? 0;
+        caCncN1 += kpi?.cnc_n1 ?? 0;
+        margeN1 += item.marge_n1 ?? 0;
+        pertesMontantN1 += item.pertes_montant_n1 ?? 0;
+      }
+    }
+
     const mp = clients ? ca / clients : 0;
     const mpN1 = clientsN1 ? caN1 / clientsN1 : 0;
     const caMagasin = Math.max(0, ca - caDelivery - caCnc);
-    caMagasinN1 = Math.max(0, caN1 - caDeliveryN1 - caCncN1);
+    const caMagasinN1 = Math.max(0, caN1 - caDeliveryN1 - caCncN1);
     const tauxPertes = ca ? pertesMontant / ca : 0;
     const tauxPertesN1 = caN1 ? pertesMontantN1 / caN1 : 0;
     return {
@@ -545,7 +589,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       tauxPertes,
       tauxPertesN1,
     };
-  }, [scopedDashItems]);
+  }, [scopedDashItems, dashScope, dashPeriodN1List, dashPrevItems, dashYear, dashWeek, selectedWeekRange]);
   const workforceQuickMetrics = useMemo(() => {
     let heuresPersonnel = 0;
     let heuresPersonnelN1 = 0;

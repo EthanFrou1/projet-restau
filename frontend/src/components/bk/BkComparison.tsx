@@ -236,8 +236,8 @@ export function BkComparison({ restaurants }: { restaurants: Restaurant[] }) {
     params.set("year", yearValue);
     params.set("month", String(Number(monthValue)));
     if (finalRestaurantCode) params.set("restaurant_code", finalRestaurantCode);
-    const data = await apiFetch<MonthlyItem[]>(`/reports/bk/monthly?${params.toString()}`);
-    return buildMonthlySummary(label, data);
+    const data = await apiFetch<{ items: MonthlyItem[] }>(`/reports/bk/monthly?${params.toString()}`);
+    return buildMonthlySummary(label, data.items);
   }
 
   async function handleCompare() {

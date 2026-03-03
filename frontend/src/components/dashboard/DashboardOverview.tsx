@@ -152,7 +152,6 @@ export function DashboardOverview({
   channelBreakdown,
   channelBreakdownN1,
   channelTrend,
-  channelMax,
   salesTrend,
   basketTrend,
   storeQuickView,
@@ -378,7 +377,7 @@ export function DashboardOverview({
                   {kpi.value}
                 </div>
               </div>
-              {kpi.change !== null ? (
+              {kpi.change !== null && dashTotals.ca > 0 ? (
                 <div className="flex items-center gap-1 text-xs">
                   {kpi.change >= 0 ? (
                     <ArrowUpRight className="h-3.5 w-3.5 text-emerald-600" />
@@ -728,7 +727,7 @@ export function DashboardOverview({
                 {(() => {
                   const labels = channelTrend.labels;
                   const allValues = channelTrend.series.flatMap((serie) => [...serie.n, ...serie.n1]);
-                  const maxValue = Math.max(...allValues, channelMax, 1);
+                  const maxValue = Math.max(...allValues, 1);
                   const chartWidth = 980;
                   const chartHeight = 320;
                   const padLeft = 2;
@@ -1251,7 +1250,7 @@ export function DashboardOverview({
                         className={`${metricColumnWidthClass} flex flex-col items-center gap-2`}
                         onMouseEnter={() => setHoveredSalesColumnIndex(idx)}
                       >
-                        <div className="h-[300px] w-full flex items-end justify-center gap-4">
+                        <div className="h-[300px] w-full flex items-end justify-center gap-2">
                           <div className="w-4 flex flex-col items-center justify-end">
                             {n > 0 && (
                               <span className="mb-1 text-[10px] font-medium text-foreground whitespace-nowrap">
@@ -1370,11 +1369,11 @@ export function DashboardOverview({
                         className={`${metricColumnWidthClass} flex flex-col items-center gap-2`}
                         onMouseEnter={() => setHoveredBasketColumnIndex(idx)}
                       >
-                        <div className="h-[300px] w-full flex items-end justify-center gap-4">
+                        <div className="h-[300px] w-full flex items-end justify-center gap-2">
                           <div className="w-4 flex flex-col items-center justify-end">
                             {n > 0 && (
                               <span className="mb-1 text-[10px] font-medium text-foreground whitespace-nowrap">
-                                {compactMoneyFmt.format(n)}
+                                {n.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}
                               </span>
                             )}
                             <div
@@ -1386,7 +1385,7 @@ export function DashboardOverview({
                           <div className="w-4 flex flex-col items-center justify-end">
                             {n1 > 0 && (
                               <span className="mb-1 text-[10px] font-medium text-muted-foreground whitespace-nowrap">
-                                {compactMoneyFmt.format(n1)}
+                                {n1.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}
                               </span>
                             )}
                             <div

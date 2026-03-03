@@ -545,42 +545,170 @@ def list_bk_reports_monthly(
             "pertes_montant": pertes_montant,
         }
 
-    prev_by_key: dict[tuple[str, date], BKDailyReport] = {}
-    if reports:
-        prev_year = year - 1
-        prev_last_day = calendar.monthrange(prev_year, month)[1]
-        prev_start = date(prev_year, month, 1)
-        prev_end = date(prev_year, month, prev_last_day)
+    prev_year = year - 1
+    prev_last_day = calendar.monthrange(prev_year, month)[1]
+    prev_start = date(prev_year, month, 1)
+    prev_end = date(prev_year, month, prev_last_day)
 
-        prev_query = (
-            db.query(BKDailyReport)
-            .options(
-                joinedload(BKDailyReport.channel_sales),
-                joinedload(BKDailyReport.kpi),
-                joinedload(BKDailyReport.divers),
-            )
-            .filter(
-                BKDailyReport.report_date >= prev_start,
-                BKDailyReport.report_date <= prev_end,
-            )
+    prev_query = (
+        db.query(BKDailyReport)
+        .options(
+            joinedload(BKDailyReport.channel_sales),
+            joinedload(BKDailyReport.kpi),
+            joinedload(BKDailyReport.divers),
+        )
+        .filter(
+            BKDailyReport.report_date >= prev_start,
+            BKDailyReport.report_date <= prev_end,
+        )
+    )
+
+    if restaurant_code:
+        prev_query = prev_query.filter(
+            BKDailyReport.restaurant_code == restaurant_code.strip().upper()
         )
 
-        if restaurant_code:
-            prev_query = prev_query.filter(
-                BKDailyReport.restaurant_code == restaurant_code.strip().upper()
-            )
+    if allowed_restaurants is not None:
+        prev_query = prev_query.filter(BKDailyReport.restaurant_code.in_(allowed_restaurants))
+    elif reports:
+        codes = {r.restaurant_code.upper() for r in reports}
+        if codes:
+            prev_query = prev_query.filter(BKDailyReport.restaurant_code.in_(codes))
 
-        if allowed_restaurants is not None:
-            prev_query = prev_query.filter(BKDailyReport.restaurant_code.in_(allowed_restaurants))
-        else:
-            codes = {r.restaurant_code for r in reports}
-            if codes:
-                prev_query = prev_query.filter(BKDailyReport.restaurant_code.in_(codes))
+    prev_reports = prev_query.all()
+    # Clé normalisée en majuscules pour matcher quel que soit la casse stockée
+    prev_by_key: dict[tuple[str, date], BKDailyReport] = {
+        (r.restaurant_code.upper(), r.report_date): r for r in prev_reports
+    }
 
-        prev_reports = prev_query.all()
-        prev_by_key = {(r.restaurant_code, r.report_date): r for r in prev_reports}
+    # Calcul des totaux N-1 sur TOUT le mois (pas seulement les jours matchant N)
+    # Utilisé par le frontend pour les KPI cards (comparaison mois entier vs mois entier)
+    def _safe_float_val(v: Any) -> float:
+        try:
+            return float(v) if v is not None else 0.0
+        except Exception:
+            return 0.0
+
+    period_n1_ca = 0.0
+    period_n1_clients = 0
+    period_n1_ca_delivery = 0.0
+    period_n1_ca_click_collect = 0.0
+    period_n1_marge = 0.0
+    period_n1_pertes_montant = 0.0
+    prev_items_list: list[dict[str, Any]] = []
+    for pr in prev_reports:
+        pr_kpi = pr.kpi
+        pr_vals = _calc_report_values(pr)
+        pr_ca = _safe_float_val(
+            pr_kpi.ca_real if pr_kpi and pr_kpi.ca_real is not None else pr_vals["ca_net_total"]
+        )
+        pr_clients = int(
+            pr_kpi.clients if pr_kpi and pr_kpi.clients is not None else pr_vals["tac_total"]
+        )
+        pr_ca_delivery = _safe_float_val(
+            pr_kpi.ca_delivery if pr_kpi and pr_kpi.ca_delivery is not None else pr_vals["ca_delivery"]
+        )
+        pr_ca_click_collect = _safe_float_val(
+            pr_kpi.ca_click_collect if pr_kpi and pr_kpi.ca_click_collect is not None else pr_vals["ca_click_collect"]
+        )
+        pr_marge = pr_vals["marge_total"]
+        pr_pertes_montant = pr_vals["pertes_montant"]
+        period_n1_ca += pr_ca
+        period_n1_clients += pr_clients
+        period_n1_ca_delivery += pr_ca_delivery
+        period_n1_ca_click_collect += pr_ca_click_collect
+        period_n1_marge += pr_marge
+        period_n1_pertes_montant += pr_pertes_montant
+        prev_items_list.append({
+            "restaurant_code": pr.restaurant_code,
+            "report_date": pr.report_date.isoformat(),
+            "ca": pr_ca,
+            "clients": pr_clients,
+            "ca_delivery": pr_ca_delivery,
+            "ca_click_collect": pr_ca_click_collect,
+            "marge": pr_marge,
+            "pertes_montant": pr_pertes_montant,
+        })
+
+    period_n1 = {
+        "ca": period_n1_ca,
+        "clients": period_n1_clients,
+        "ca_delivery": period_n1_ca_delivery,
+        "ca_click_collect": period_n1_ca_click_collect,
+        "marge": period_n1_marge,
+        "pertes_montant": period_n1_pertes_montant,
+    }
 
     payload = []
+
+    # Quand aucun import n'existe pour la période N, on génère des entrées
+    # fantômes à partir des données N-1 afin que le frontend puisse afficher
+    # la courbe de comparaison même avant le premier import du mois.
+    if not reports and prev_reports:
+        for prev_report in prev_reports:
+            prev_values = _calc_report_values(prev_report)
+            prev_kpi = prev_report.kpi
+            prev_ca_real = (
+                prev_kpi.ca_real
+                if prev_kpi and prev_kpi.ca_real is not None
+                else prev_values["ca_net_total"]
+            )
+            try:
+                current_year_date = date(
+                    year, prev_report.report_date.month, prev_report.report_date.day
+                )
+            except ValueError:
+                continue
+            payload.append(
+                {
+                    "id": None,
+                    "restaurant_code": prev_report.restaurant_code,
+                    "report_date": current_year_date.isoformat(),
+                    "created_at": None,
+                    "comment": None,
+                    "comment_n1": prev_report.comment,
+                    "ca_net_total": 0,
+                    "ca_ttc_total": 0,
+                    "marge": 0,
+                    "taux_pertes": 0,
+                    "pertes_montant": 0,
+                    "marge_n1": prev_values["marge_total"],
+                    "taux_pertes_n1": None,
+                    "pertes_montant_n1": prev_values["pertes_montant"],
+                    "tac_total": 0,
+                    "kpi": {
+                        "n1_ht": prev_ca_real,
+                        "var_n1": None,
+                        "prev_ht": None,
+                        "ca_real": 0,
+                        "clients": 0,
+                        "clients_n1": prev_kpi.clients if prev_kpi else None,
+                        "ca_delivery": 0,
+                        "ca_delivery_n1": prev_kpi.ca_delivery if prev_kpi else prev_values["ca_delivery"],
+                        "client_delivery": 0,
+                        "client_delivery_n1": prev_kpi.client_delivery if prev_kpi else prev_values["client_delivery"],
+                        "ca_click_collect": 0,
+                        "cnc_n1": prev_kpi.ca_click_collect if prev_kpi else prev_values["ca_click_collect"],
+                        "client_click_collect": 0,
+                        "client_n1": prev_kpi.client_click_collect if prev_kpi else prev_values["client_click_collect"],
+                        "cash_diff": None,
+                        "heures_personnel": None,
+                        "heures_personnel_n1": prev_kpi.heures_personnel if prev_kpi else None,
+                        "heures_travail": None,
+                        "heures_travail_n1": prev_kpi.heures_travail if prev_kpi else None,
+                        "taux_horaire": None,
+                        "taux_horaire_n1": prev_kpi.taux_horaire if prev_kpi else None,
+                        "osat_score": None,
+                        "osat_score_n1": prev_kpi.osat_score if prev_kpi else None,
+                        "gxi_score": None,
+                        "gxi_score_n1": prev_kpi.gxi_score if prev_kpi else None,
+                        "google_score": None,
+                        "google_score_n1": prev_kpi.google_score if prev_kpi else None,
+                    },
+                }
+            )
+        return {"items": payload, "period_n1": period_n1, "prev_items": prev_items_list}
+
     for report in reports:
         values = _calc_report_values(report)
         ca_net_total = values["ca_net_total"]
@@ -600,7 +728,7 @@ def list_bk_reports_monthly(
         except ValueError:
             prev_date = None
 
-        prev_report = prev_by_key.get((report.restaurant_code, prev_date)) if prev_date else None
+        prev_report = prev_by_key.get((report.restaurant_code.upper(), prev_date)) if prev_date else None
         prev_values = _calc_report_values(prev_report) if prev_report else None
         prev_kpi = prev_report.kpi if prev_report else None
 
@@ -682,20 +810,27 @@ def list_bk_reports_monthly(
                 "pertes_montant_n1": prev_pertes_montant,
                 "tac_total": tac_total,
                 "kpi": {
-                    "n1_ht": kpi.n1_ht if kpi and kpi.n1_ht is not None else prev_ca_real,
-                    "var_n1": kpi.var_n1 if kpi else None,
+                    # Priorité aux vraies données N-1 depuis la BDD (prev_report).
+                    # Les valeurs stockées dans le KPI (n1_ht, clients_n1…) ne servent
+                    # que de fallback quand l'année précédente n'a pas encore été importée.
+                    "n1_ht": prev_ca_real if prev_ca_real is not None else (kpi.n1_ht if kpi else None),
+                    "var_n1": (
+                        round((ca_real_float - prev_ca_real_float) / prev_ca_real_float, 6)
+                        if prev_ca_real_float
+                        else (kpi.var_n1 if kpi else None)
+                    ),
                     "prev_ht": kpi.prev_ht if kpi else None,
                     "ca_real": ca_real,
                     "clients": clients,
-                    "clients_n1": kpi.clients_n1 if kpi and kpi.clients_n1 is not None else prev_clients,
+                    "clients_n1": prev_clients if prev_clients is not None else (kpi.clients_n1 if kpi else None),
                     "ca_delivery": kpi.ca_delivery if kpi and kpi.ca_delivery is not None else values["ca_delivery"],
-                    "ca_delivery_n1": kpi.ca_delivery_n1 if kpi and kpi.ca_delivery_n1 is not None else prev_ca_delivery,
+                    "ca_delivery_n1": prev_ca_delivery if prev_ca_delivery is not None else (kpi.ca_delivery_n1 if kpi else None),
                     "client_delivery": kpi.client_delivery if kpi and kpi.client_delivery is not None else values["client_delivery"],
-                    "client_delivery_n1": kpi.client_delivery_n1 if kpi and kpi.client_delivery_n1 is not None else prev_client_delivery,
+                    "client_delivery_n1": prev_client_delivery if prev_client_delivery is not None else (kpi.client_delivery_n1 if kpi else None),
                     "ca_click_collect": kpi.ca_click_collect if kpi and kpi.ca_click_collect is not None else values["ca_click_collect"],
-                    "cnc_n1": kpi.cnc_n1 if kpi and kpi.cnc_n1 is not None else prev_ca_click_collect,
+                    "cnc_n1": prev_ca_click_collect if prev_ca_click_collect is not None else (kpi.cnc_n1 if kpi else None),
                     "client_click_collect": kpi.client_click_collect if kpi and kpi.client_click_collect is not None else values["client_click_collect"],
-                    "client_n1": kpi.client_n1 if kpi and kpi.client_n1 is not None else prev_client_click_collect,
+                    "client_n1": prev_client_click_collect if prev_client_click_collect is not None else (kpi.client_n1 if kpi else None),
                     "cash_diff": kpi.cash_diff if kpi else None,
                     "heures_personnel": kpi.heures_personnel if kpi else None,
                     "heures_personnel_n1": prev_heures_personnel,
@@ -713,7 +848,7 @@ def list_bk_reports_monthly(
             }
         )
 
-    return payload
+    return {"items": payload, "period_n1": period_n1, "prev_items": prev_items_list}
 
 
 @router.get("/{report_id}")
