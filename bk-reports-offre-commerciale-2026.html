@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BK Reports — Offre Commerciale</title>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Bree+Serif&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Barlow', 'Segoe UI', sans-serif;
+      background: #F5ECD7;
+      color: #4A2810;
+      min-height: 100vh;
+    }
+
+    h1, h2, h3, .brand { font-family: 'Bree Serif', Georgia, serif; }
+
+    /* ── HEADER ── */
+    header {
+      background: #4A2810;
+      padding: 0;
+    }
+    .header-top-bar { height: 6px; background: #D62900; }
+    .header-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 28px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo-block { display: flex; align-items: center; gap: 14px; }
+    .logo-badge {
+      width: 48px; height: 48px;
+      background: #D62900;
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Bree Serif', Georgia, serif;
+      font-size: 18px; color: #FFD98A; font-weight: 700;
+    }
+    .logo-text p:first-child {
+      font-family: 'Bree Serif', Georgia, serif;
+      font-size: 22px; color: #FFD98A; letter-spacing: 0.5px;
+    }
+    .logo-text p:last-child {
+      font-size: 11px; color: #C49A6C;
+      letter-spacing: 1.5px; text-transform: uppercase; margin-top: 2px;
+    }
+    .header-badge {
+      background: #D62900; color: #fff;
+      font-size: 11px; font-weight: 700;
+      padding: 6px 14px; border-radius: 20px;
+      letter-spacing: 1px; text-transform: uppercase;
+    }
+
+    /* ── MAIN ── */
+    main { max-width: 960px; margin: 0 auto; padding: 48px 32px; }
+
+    /* Hero */
+    .hero { text-align: center; margin-top: 14px; margin-bottom: 52px; }
+    .hero h1 { font-size: 36px; color: #4A2810; margin-bottom: 12px; }
+    .hero p { font-size: 17px; color: #6B4226; max-width: 600px; margin: 0 auto; line-height: 1.6; }
+    .hero-tag {
+      display: inline-block;
+      background: #D62900; color: #fff;
+      font-size: 12px; font-weight: 700;
+      padding: 5px 16px; border-radius: 20px;
+      margin-bottom: 18px; letter-spacing: 1px; text-transform: uppercase;
+    }
+
+    /* Section title */
+    .section-title {
+      font-family: 'Bree Serif', Georgia, serif;
+      font-size: 22px; color: #4A2810;
+      margin-bottom: 20px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1; height: 2px;
+      background: linear-gradient(90deg, #FFD98A, transparent);
+    }
+
+    /* ── INCLUS ── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 52px;
+    }
+    .feature-card {
+      background: #FFFCF0;
+      border: 1.5px solid #FFD98A;
+      border-radius: 12px;
+      padding: 20px;
+      display: flex; gap: 14px; align-items: flex-start;
+    }
+    .feature-icon {
+      width: 40px; height: 40px; min-width: 40px;
+      background: #D62900; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+    .feature-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .feature-card p { font-size: 13px; color: #6B4226; line-height: 1.5; }
+
+    /* ── TARIFS ── */
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+    .pricing-card {
+      background: #FFFCF0;
+      border: 1.5px solid #FFD98A;
+      border-radius: 16px;
+      overflow: hidden;
+      position: relative;
+    }
+    .pricing-card.featured {
+      border-color: #D62900;
+      box-shadow: 0 8px 32px rgba(214,41,0,0.18);
+      transform: scale(1.02);
+    }
+    .pricing-card-header {
+      background: #4A2810;
+      padding: 20px 24px 16px;
+    }
+    .pricing-card.featured .pricing-card-header { background: #D62900; }
+    .pricing-card-header .plan-name {
+      font-family: 'Bree Serif', Georgia, serif;
+      font-size: 20px; color: #FFD98A;
+    }
+    .pricing-card.featured .pricing-card-header .plan-name { color: #fff; }
+    .pricing-card-header .plan-sub {
+      font-size: 12px; color: #C49A6C; margin-top: 2px;
+    }
+    .pricing-card.featured .pricing-card-header .plan-sub { color: rgba(255,255,255,0.75); }
+
+    .popular-badge {
+      position: absolute; top: 12px; right: 12px;
+      background: #FFD98A; color: #4A2810;
+      font-size: 10px; font-weight: 700;
+      padding: 4px 10px; border-radius: 12px;
+      letter-spacing: 0.5px; text-transform: uppercase;
+    }
+
+    .pricing-card-body { padding: 24px; }
+    .price-block { margin-bottom: 20px; }
+    .price-normal {
+      font-family: 'Bree Serif', Georgia, serif;
+      font-size: 38px; color: #4A2810;
+    }
+    .price-normal span { font-size: 18px; color: #6B4226; }
+    .price-early {
+      display: flex; align-items: center; gap: 8px; margin-top: 6px;
+    }
+    .price-early .old { font-size: 14px; color: #9B6A3A; text-decoration: line-through; }
+    .price-early .new {
+      font-size: 20px; font-weight: 700; color: #D62900;
+    }
+    .price-early .badge-discount {
+      background: #FFF3CD; color: #7A4010;
+      font-size: 11px; font-weight: 700;
+      padding: 2px 8px; border-radius: 8px;
+    }
+
+    .pricing-features { list-style: none; }
+    .pricing-features li {
+      font-size: 13px; color: #4A2810;
+      padding: 6px 0;
+      border-bottom: 1px solid #FFD98A33;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .pricing-features li::before {
+      content: '✓';
+      color: #D62900; font-weight: 700; font-size: 14px;
+    }
+
+    .setup-note {
+      font-size: 12px; color: #9B6A3A;
+      margin-top: 16px; padding-top: 16px;
+      border-top: 1px solid #FFD98A55;
+    }
+    .setup-note strong { color: #4A2810; }
+
+    /* ── EARLY ADOPTER ── */
+    .early-adopter-banner {
+      background: #4A2810;
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin-bottom: 52px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 24px;
+    }
+    .early-adopter-banner h3 {
+      font-family: 'Bree Serif', Georgia, serif;
+      font-size: 22px; color: #FFD98A; margin-bottom: 8px;
+    }
+    .early-adopter-banner p { font-size: 14px; color: #C49A6C; line-height: 1.6; }
+    .early-adopter-banner p strong { color: #FFD98A; }
+    .early-cta {
+      background: #D62900; color: #fff;
+      border: none; border-radius: 10px;
+      padding: 14px 28px; cursor: pointer;
+      font-family: 'Bree Serif', Georgia, serif;
+      font-size: 16px; white-space: nowrap;
+    }
+
+    /* ── SUPPORT ── */
+    .support-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 52px;
+    }
+    .support-card {
+      background: #FFFCF0;
+      border: 1.5px solid #FFD98A;
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .support-card h3 {
+      font-size: 16px; font-weight: 700;
+      margin-bottom: 8px; color: #4A2810;
+    }
+    .support-price {
+      font-family: 'Bree Serif', Georgia, serif;
+      font-size: 24px; color: #D62900;
+      margin-bottom: 12px;
+    }
+    .support-price span { font-size: 14px; color: #6B4226; }
+    .support-card ul { list-style: none; }
+    .support-card ul li {
+      font-size: 13px; color: #4A2810;
+      padding: 4px 0;
+      display: flex; align-items: flex-start; gap: 8px;
+    }
+    .support-card ul li::before { content: '→'; color: #D62900; }
+
+    /* ── HOSTING ── */
+    .hosting-block {
+      background: #FFFCF0;
+      border: 1.5px solid #FFD98A;
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin-bottom: 52px;
+    }
+    .hosting-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px; margin-top: 20px;
+    }
+    .hosting-item { display: flex; gap: 12px; align-items: flex-start; }
+    .hosting-item .ico {
+      font-size: 22px; min-width: 32px; text-align: center; margin-top: 2px;
+    }
+    .hosting-item h4 { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+    .hosting-item p { font-size: 12px; color: #6B4226; line-height: 1.5; }
+
+    /* ── FOOTER ── */
+    footer {
+      background: #4A2810;
+      margin-top: 0;
+    }
+    .footer-gradient { height: 3px; background: linear-gradient(90deg, #D62900, #FFB347, #FFD98A); }
+    .footer-inner {
+      max-width: 960px; margin: 0 auto;
+      padding: 24px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px;
+    }
+    .footer-inner p { font-size: 12px; color: #8B6040; }
+    .footer-inner p strong { color: #C49A6C; }
+    .footer-brand {
+      font-family: 'Bree Serif', Georgia, serif;
+      font-size: 14px; color: #FFD98A; opacity: 0.7;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 600px) {
+      main { padding: 32px 16px; }
+      .header-inner { padding: 20px 16px; }
+      .pricing-card.featured { transform: none; }
+      .early-adopter-banner { flex-direction: column; }
+      .footer-inner { flex-direction: column; text-align: center; }
+    }
+
+    @page {
+      size: A4;
+      margin: 12mm;
+    }
+    @media print {
+      body {
+        background: #fff;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      main {
+        max-width: 100%;
+        padding: 0;
+      }
+      .pricing-card,
+      .feature-card,
+      .support-card,
+      .hosting-block,
+      table,
+      tr {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .section-title {
+        break-after: avoid;
+        page-break-after: avoid;
+      }
+      .section-title-tarifs {
+        break-before: page;
+        page-break-before: always;
+      }
+      .section-title-hosting {
+        break-before: page;
+        page-break-before: always;
+      }
+      .section-title-hosting + .hosting-block {
+        break-before: avoid;
+        page-break-before: avoid;
+      }
+      .pricing-card.featured {
+        transform: none;
+        box-shadow: none;
+      }
+      .pricing-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+      .pricing-card {
+        border-radius: 10px;
+      }
+      .pricing-card-header {
+        padding: 12px 14px 10px;
+      }
+      .pricing-card-header .plan-name {
+        font-size: 14px;
+      }
+      .pricing-card-header .plan-sub {
+        font-size: 10px;
+      }
+      .pricing-card-body {
+        padding: 12px;
+      }
+      .price-block {
+        margin-bottom: 10px;
+      }
+      .price-normal {
+        font-size: 24px;
+      }
+      .price-normal span {
+        font-size: 12px;
+      }
+      .price-early .old {
+        font-size: 11px;
+      }
+      .price-early .new {
+        font-size: 14px;
+      }
+      .price-early .badge-discount {
+        font-size: 9px;
+        padding: 2px 6px;
+      }
+      .pricing-card-body > div[style*="display:flex"] {
+        padding: 8px 10px !important;
+        margin-bottom: 10px !important;
+      }
+      .pricing-card-body > div[style*="display:flex"] p {
+        font-size: 9px !important;
+        line-height: 1.25 !important;
+      }
+      .pricing-card-body > div[style*="display:flex"] span {
+        font-size: 15px !important;
+      }
+      .pricing-features li {
+        font-size: 10.5px;
+        padding: 3px 0;
+      }
+      .pricing-features li::before {
+        font-size: 11px;
+      }
+      .setup-note {
+        font-size: 9px;
+        margin-top: 10px;
+        padding-top: 10px;
+      }
+      .support-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+      .support-card {
+        padding: 14px;
+        border-radius: 10px;
+      }
+      .support-card h3 {
+        font-size: 13px;
+        margin-bottom: 6px;
+      }
+      .support-price {
+        font-size: 18px;
+        margin-bottom: 8px;
+      }
+      .support-price span {
+        font-size: 11px;
+      }
+      .support-card ul li {
+        font-size: 10.5px;
+        padding: 3px 0;
+      }
+      .support-card ul li::before {
+        font-size: 11px;
+      }
+      .support-card .setup-note {
+        font-size: 9px;
+      }
+      footer {
+        margin-top: 18px !important;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-top-bar"></div>
+  <div class="header-inner">
+    <div class="logo-block">
+      <div class="logo-badge">BK</div>
+      <div class="logo-text">
+        <p>BK Reports</p>
+        <p>Gestion &amp; Performance</p>
+      </div>
+    </div>
+    <div class="header-badge">Offre Commerciale 2026</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-tag">Solution pour franchisés restauration rapide</div>
+    <h1>Pilotez vos restaurants en temps réel</h1>
+    <p>Un tableau de bord pensé pour les franchisés BK — importez vos données quotidiennes, suivez vos performances et comparez-les à l'année précédente, en un coup d'œil.</p>
+  </div>
+
+  <!-- CE QUI EST INCLUS -->
+  <div class="section-title">Ce qui est inclus dans chaque abonnement</div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <div>
+        <h3>Dashboard N vs N-1</h3>
+        <p>Comparez chaque indicateur (CA, clients, delivery, C&amp;C) à la même période l'année précédente.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📥</div>
+      <div>
+        <h3>Import quotidien BK</h3>
+        <p>Vos fichiers CSV du système BK importés en quelques clics. Format natif, aucune ressaisie.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🏪</div>
+      <div>
+        <h3>Multi-restaurant</h3>
+        <p>Consolidation automatique de tous vos restaurants en une seule vue direction.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">👥</div>
+      <div>
+        <h3>Gestion des accès</h3>
+        <p>Admin, Manager, Lecture seule — chaque profil accède uniquement à ce dont il a besoin.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📈</div>
+      <div>
+        <h3>Indicateurs RH &amp; qualité</h3>
+        <p>Heures personnel, taux horaire, OSAT, GXI, avis Google — tout centralisé.</p>
+      </div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔒</div>
+      <div>
+        <h3>Données hébergées en France</h3>
+        <p>Serveurs OVH, datacenter Roubaix. Hébergement en France, traitement des données aligné RGPD.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- TARIFS -->
+  <div class="section-title section-title-tarifs">Tarifs</div>
+  <div class="pricing-grid">
+
+    <!-- Starter -->
+    <div class="pricing-card">
+      <div class="pricing-card-header">
+        <div class="plan-name">Starter</div>
+        <div class="plan-sub">1 restaurant</div>
+      </div>
+      <div class="pricing-card-body">
+        <div class="price-block">
+          <div class="price-normal">119 <span>€/mois</span></div>
+          <div class="price-early">
+            <span class="old">119 €</span>
+            <span class="new">95 €/mois</span>
+            <span class="badge-discount">Early −20%</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#FDF5E4;border:1.5px solid #FFD98A;border-radius:8px;padding:10px 14px;margin-bottom:18px;">
+          <div>
+            <p style="margin:0;font-size:11px;font-weight:700;color:#9B6A3A;text-transform:uppercase;letter-spacing:1px;">Intégration & onboarding</p>
+            <p style="margin:2px 0 0 0;font-size:11px;color:#6B4226;">Config. compte · import historique · 2h formation</p>
+          </div>
+          <span style="font-family:'Bree Serif',Georgia,serif;font-size:20px;color:#4A2810;white-space:nowrap;margin-left:12px;">499 €</span>
+        </div>
+        <ul class="pricing-features">
+          <li>1 restaurant inclus</li>
+          <li>Dashboard complet N vs N-1</li>
+          <li>Import CSV quotidien</li>
+          <li>Gestion des accès</li>
+          <li>Support standard (72h)</li>
+          <li>Hébergement France inclus</li>
+        </ul>
+        <div class="setup-note">Tarif préférentiel garanti pendant 12 mois. À partir du 13e mois : retour au tarif standard (hors remise early adopter).</div>
+      </div>
+    </div>
+
+    <!-- Trio (featured) -->
+    <div class="pricing-card featured">
+
+      <div class="pricing-card-header">
+        <div class="plan-name">Trio</div>
+        <div class="plan-sub">3 restaurants</div>
+      </div>
+      <div class="pricing-card-body">
+        <div class="price-block">
+          <div class="price-normal">299 <span>€/mois</span></div>
+          <div class="price-early">
+            <span class="old">299 €</span>
+            <span class="new">239 €/mois</span>
+            <span class="badge-discount">Early −20%</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#FDF5E4;border:1.5px solid #FFD98A;border-radius:8px;padding:10px 14px;margin-bottom:18px;">
+          <div>
+            <p style="margin:0;font-size:11px;font-weight:700;color:#9B6A3A;text-transform:uppercase;letter-spacing:1px;">Intégration & onboarding</p>
+            <p style="margin:2px 0 0 0;font-size:11px;color:#6B4226;">Config. compte · import historique · 6h formation (2h/resto)</p>
+          </div>
+          <span style="font-family:'Bree Serif',Georgia,serif;font-size:20px;color:#4A2810;white-space:nowrap;margin-left:12px;">1 199 €</span>
+        </div>
+        <ul class="pricing-features">
+          <li>3 restaurants inclus</li>
+          <li>Vue consolidée multi-resto</li>
+          <li>Dashboard complet N vs N-1</li>
+          <li>Import CSV quotidien</li>
+          <li>Gestion des accès</li>
+          <li>Support standard (72h)</li>
+          <li>Hébergement France inclus</li>
+        </ul>
+        <div class="setup-note">Tarif préférentiel garanti pendant 12 mois. À partir du 13e mois : retour au tarif standard (hors remise early adopter).</div>
+      </div>
+    </div>
+
+    <!-- Quintette -->
+    <div class="pricing-card">
+      <div class="pricing-card-header">
+        <div class="plan-name">Quintette</div>
+        <div class="plan-sub">5 restaurants</div>
+      </div>
+      <div class="pricing-card-body">
+        <div class="price-block">
+          <div class="price-normal">449 <span>€/mois</span></div>
+          <div class="price-early">
+            <span class="old">449 €</span>
+            <span class="new">359 €/mois</span>
+            <span class="badge-discount">Early −20%</span>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#FDF5E4;border:1.5px solid #FFD98A;border-radius:8px;padding:10px 14px;margin-bottom:18px;">
+          <div>
+            <p style="margin:0;font-size:11px;font-weight:700;color:#9B6A3A;text-transform:uppercase;letter-spacing:1px;">Intégration & onboarding</p>
+            <p style="margin:2px 0 0 0;font-size:11px;color:#6B4226;">Config. compte · import historique · 10h formation (2h/resto)</p>
+          </div>
+          <span style="font-family:'Bree Serif',Georgia,serif;font-size:20px;color:#4A2810;white-space:nowrap;margin-left:12px;">1 999 €</span>
+        </div>
+        <ul class="pricing-features">
+          <li>5 restaurants inclus</li>
+          <li>Vue consolidée multi-resto</li>
+          <li>Dashboard complet N vs N-1</li>
+          <li>Import CSV quotidien</li>
+          <li>Revue direction annuelle</li>
+          <li>Support standard (72h)</li>
+          <li>Hébergement France inclus</li>
+        </ul>
+        <div class="setup-note">Tarif préférentiel garanti pendant 12 mois. À partir du 13e mois : retour au tarif standard (hors remise early adopter).</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- SUPPORT -->
+  <div class="section-title">Support &amp; Maintenance <span style="font-family:'Barlow',sans-serif;font-size:13px;font-weight:500;color:#9B6A3A;letter-spacing:0;">— quotas calculés par restaurant</span></div>
+  <div class="support-grid">
+    <div class="support-card">
+      <h3>Support Standard</h3>
+      <div class="support-price">Inclus <span>dans l'abonnement</span></div>
+      <ul>
+        <li>Tickets par email</li>
+        <li>Réponse sous 72h ouvrées</li>
+        <li>1h de support correctif/restaurant/mois</li>
+        <li>Mises à jour de sécurité</li>
+        <li>Évolutions non incluses</li>
+      </ul>
+      <div class="setup-note">Au-delà du quota, intervention facturée à 60–90 €/h.</div>
+    </div>
+    <div class="support-card" style="border-color:#D62900;">
+      <h3>Support Renforcé</h3>
+      <div class="support-price">+79 € <span>/mois</span></div>
+      <ul>
+        <li>Réponse sous 48h ouvrées</li>
+        <li>2h de maintenance/restaurant/mois incluses</li>
+        <li>Correctifs de bugs prioritaires</li>
+
+        <li>Évolutions facturées séparément</li>
+      </ul>
+    </div>
+    <div class="support-card">
+      <h3>Évolutions &amp; Développement</h3>
+      <div class="support-price">60–90 € <span>/heure</span></div>
+      <ul>
+        <li>Nouvelles fonctionnalités à la demande</li>
+        <li>Toute évolution hors correctif de bug</li>
+        <li>Intégrations spécifiques</li>
+        <li>Rapports personnalisés</li>
+        <li>Estimation gratuite sous 48h</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- HÉBERGEMENT & SÉCURITÉ -->
+  <div class="section-title section-title-hosting">Hébergement &amp; Sécurité des données</div>
+  <div class="hosting-block">
+    <div class="hosting-grid">
+      <div class="hosting-item">
+        <div class="ico">🇫🇷</div>
+        <div>
+          <h4>Données hébergées en France</h4>
+          <p>Serveurs OVH, datacenter de Roubaix. Vos données ne quittent jamais le territoire national.</p>
+        </div>
+      </div>
+      <div class="hosting-item">
+        <div class="ico">🔐</div>
+        <div>
+          <h4>Sécurité applicative</h4>
+          <p>Connexion HTTPS (SSL), mots de passe chiffrés (bcrypt), authentification sécurisée (JWT).</p>
+        </div>
+      </div>
+      <div class="hosting-item">
+        <div class="ico">📋</div>
+        <div>
+          <h4>Traitement des données aligné RGPD</h4>
+          <p>Données hébergées en France. Vos données vous appartiennent, export sur demande.</p>
+        </div>
+      </div>
+      <div class="hosting-item">
+        <div class="ico">💾</div>
+        <div>
+          <h4>Sauvegardes & reprise sur panne</h4>
+          <p>Sauvegardes automatiques OVH : 7 snapshots quotidiens conservés (addon OVH inclus). En cas de panne, restauration depuis l'un des 7 derniers points de sauvegarde. Rétention étendue possible sur demande.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLEAU RÉCAP -->
+  <div class="section-title">Tableau récapitulatif</div>
+  <div style="background:#FFFCF0;border:1.5px solid #FFD98A;border-radius:16px;overflow:hidden;margin-bottom:52px;">
+    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+      <thead>
+        <tr style="background:#4A2810;color:#FFD98A;">
+          <th style="padding:14px 20px;text-align:left;font-family:'Bree Serif',Georgia,serif;font-weight:400;">Offre</th>
+          <th style="padding:14px 16px;text-align:center;">Restaurants</th>
+          <th style="padding:14px 16px;text-align:center;">Prix mensuel</th>
+          <th style="padding:14px 16px;text-align:center;color:#FFD98A;">Early −20%</th>
+          <th style="padding:14px 16px;text-align:center;">Onboarding</th>
+          <th style="padding:14px 16px;text-align:center;">Annuel normal</th>
+          <th style="padding:14px 20px;text-align:center;color:#FFD98A;">Annuel early</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #FFD98A55;">
+          <td style="padding:14px 20px;font-weight:700;">Starter</td>
+          <td style="padding:14px 16px;text-align:center;">1</td>
+          <td style="padding:14px 16px;text-align:center;color:#6B4226;">119 €/mois</td>
+          <td style="padding:14px 16px;text-align:center;font-weight:700;color:#D62900;">95 €/mois</td>
+          <td style="padding:14px 16px;text-align:center;">499 €</td>
+          <td style="padding:14px 16px;text-align:center;color:#6B4226;">1 428 €/an</td>
+          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#D62900;">1 140 €/an</td>
+        </tr>
+        <tr style="border-bottom:1px solid #FFD98A55;background:#FFF8EC;">
+          <td style="padding:14px 20px;font-weight:700;">Trio</td>
+          <td style="padding:14px 16px;text-align:center;">3</td>
+          <td style="padding:14px 16px;text-align:center;color:#6B4226;">299 €/mois</td>
+          <td style="padding:14px 16px;text-align:center;font-weight:700;color:#D62900;">239 €/mois</td>
+          <td style="padding:14px 16px;text-align:center;">1 199 €</td>
+          <td style="padding:14px 16px;text-align:center;color:#6B4226;">3 588 €/an</td>
+          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#D62900;">2 868 €/an</td>
+        </tr>
+        <tr style="border-bottom:1px solid #FFD98A55;">
+          <td style="padding:14px 20px;font-weight:700;">Quintette</td>
+          <td style="padding:14px 16px;text-align:center;">5</td>
+          <td style="padding:14px 16px;text-align:center;color:#6B4226;">449 €/mois</td>
+          <td style="padding:14px 16px;text-align:center;font-weight:700;color:#D62900;">359 €/mois</td>
+          <td style="padding:14px 16px;text-align:center;">1 999 €</td>
+          <td style="padding:14px 16px;text-align:center;color:#6B4226;">5 388 €/an</td>
+          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#D62900;">4 308 €/an</td>
+        </tr>
+        <tr>
+          <td style="padding:14px 20px;font-weight:700;">Sur mesure</td>
+          <td style="padding:14px 16px;text-align:center;">6+</td>
+          <td colspan="5" style="padding:14px 20px;text-align:center;color:#D62900;font-weight:600;">Sur devis — tarif dégressif</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+
+</main>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-gradient"></div>
+  <div class="footer-inner">
+    <div>
+      <p><strong>BK Reports</strong> — Solution de reporting sur-mesure pour franchisés de restauration rapide</p>
+      <p style="margin-top:4px;">Données hébergées en France · Traitement des données aligné RGPD · Support inclus</p>
+    </div>
+    <div class="footer-brand">BK Reports © 2026</div>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -83,7 +83,7 @@ export function UserListCard({ isDev, isAdmin, meId, users, loading, onAskDelete
               <Button
                 variant="destructive"
                 size="sm"
-                disabled={row.original.id === meId || row.original.role === "DEV" || row.original.role === "ADMIN"}
+                disabled={row.original.id === meId || row.original.role === "DEV" || (!isDev && row.original.role === "ADMIN")}
                 onClick={() => onAskDeleteUser(row.original.id, row.original.email)}
               >
                 Supprimer
