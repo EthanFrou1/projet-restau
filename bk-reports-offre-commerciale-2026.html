@@ -186,6 +186,20 @@
       border-top: 1px solid #FFD98A55;
     }
     .setup-note strong { color: #4A2810; }
+    .onboarding-badge {
+      display: inline-block;
+      background: #D62900;
+      color: #fff;
+      font-size: 7px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 6px;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
 
     /* ── EARLY ADOPTER ── */
     .early-adopter-banner {
@@ -379,7 +393,7 @@
         font-size: 9px !important;
         line-height: 1.25 !important;
       }
-      .pricing-card-body > div[style*="display:flex"] span {
+      .pricing-card-body > div[style*="display:flex"] span:not(.onboarding-badge) {
         font-size: 15px !important;
       }
       .pricing-features li {
@@ -423,6 +437,14 @@
       }
       .support-card .setup-note {
         font-size: 9px;
+      }
+      .onboarding-badge {
+        font-size: 7px !important;
+        padding: 1px 4px !important;
+        border-radius: 6px !important;
+        margin-bottom: 2px !important;
+        letter-spacing: 0.2px !important;
+        white-space: nowrap !important;
       }
       footer {
         margin-top: 18px !important;
@@ -520,11 +542,12 @@
           <div class="price-normal">40 <span>€/mois (480 €/an)</span></div>
           <div class="price-early">
             <span class="old">+ Licence annuelle</span>
-            <span class="new">1 900 €/an</span>
+            <span class="new">500 €/an</span>
           </div>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;background:#FDF5E4;border:1.5px solid #FFD98A;border-radius:8px;padding:10px 14px;margin-bottom:18px;">
           <div>
+            <span class="onboarding-badge">Première année</span>
             <p style="margin:0;font-size:11px;font-weight:700;color:#9B6A3A;text-transform:uppercase;letter-spacing:1px;">Intégration & onboarding</p>
             <p style="margin:2px 0 0 0;font-size:11px;color:#6B4226;">Config. compte · import historique · 2h formation</p>
           </div>
@@ -554,11 +577,12 @@
           <div class="price-normal">60 <span>€/mois (720 €/an)</span></div>
           <div class="price-early">
             <span class="old">+ Licence annuelle</span>
-            <span class="new">4 000 €/an</span>
+            <span class="new">1 250 €/an</span>
           </div>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;background:#FDF5E4;border:1.5px solid #FFD98A;border-radius:8px;padding:10px 14px;margin-bottom:18px;">
           <div>
+            <span class="onboarding-badge">Première année</span>
             <p style="margin:0;font-size:11px;font-weight:700;color:#9B6A3A;text-transform:uppercase;letter-spacing:1px;">Intégration & onboarding</p>
             <p style="margin:2px 0 0 0;font-size:11px;color:#6B4226;">Config. compte · import historique · 6h formation (2h/resto) · facturé une seule fois</p>
           </div>
@@ -588,11 +612,12 @@
           <div class="price-normal">120 <span>€/mois (1 440 €/an)</span></div>
           <div class="price-early">
             <span class="old">+ Licence annuelle</span>
-            <span class="new">7 500 €/an</span>
+            <span class="new">2 000 €/an</span>
           </div>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;background:#FDF5E4;border:1.5px solid #FFD98A;border-radius:8px;padding:10px 14px;margin-bottom:18px;">
           <div>
+            <span class="onboarding-badge">Première année</span>
             <p style="margin:0;font-size:11px;font-weight:700;color:#9B6A3A;text-transform:uppercase;letter-spacing:1px;">Intégration & onboarding</p>
             <p style="margin:2px 0 0 0;font-size:11px;color:#6B4226;">Config. compte · import historique · 10h formation (2h/resto)</p>
           </div>
@@ -621,7 +646,7 @@
       <div class="support-price">Inclus <span>dans la licence</span></div>
       <ul>
         <li>Réponse sous 72h ouvrées</li>
-        <li>Support correctif inclus (périmètre standard)</li>
+        <li>Support correctif inclus</li>
         <li>Mises à jour de sécurité</li>
         <li>Évolutions incluses gratuitement</li>
       </ul>
@@ -683,28 +708,28 @@
           <td style="padding:14px 20px;font-weight:700;">Starter</td>
           <td style="padding:14px 16px;text-align:center;">1</td>
           <td style="padding:14px 16px;text-align:center;color:#6B4226;">40 €/mois (480 €/an)</td>
-          <td style="padding:14px 16px;text-align:center;font-weight:700;color:#D62900;">1 900 €/an</td>
+          <td style="padding:14px 16px;text-align:center;font-weight:700;color:#D62900;">500 €/an</td>
           <td style="padding:14px 16px;text-align:center;">+ 300 €</td>
-          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#D62900;">2 680 €/an</td>
-          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#6B4226;">2 380 €/an</td>
+          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#D62900;">1 280 €/an</td>
+          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#6B4226;">980 €/an</td>
         </tr>
         <tr style="border-bottom:1px solid #FFD98A55;background:#FFF8EC;">
           <td style="padding:14px 20px;font-weight:700;">Trio</td>
           <td style="padding:14px 16px;text-align:center;">3</td>
           <td style="padding:14px 16px;text-align:center;color:#6B4226;">60 €/mois (720 €/an)</td>
-          <td style="padding:14px 16px;text-align:center;font-weight:700;color:#D62900;">4 000 €/an</td>
+          <td style="padding:14px 16px;text-align:center;font-weight:700;color:#D62900;">1 250 €/an</td>
           <td style="padding:14px 16px;text-align:center;">+ 600 €</td>
-          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#D62900;">5 320 €/an</td>
-          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#6B4226;">4 720 €/an</td>
+          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#D62900;">2 570 €/an</td>
+          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#6B4226;">1 970 €/an</td>
         </tr>
         <tr style="border-bottom:1px solid #FFD98A55;">
           <td style="padding:14px 20px;font-weight:700;">Quintette</td>
           <td style="padding:14px 16px;text-align:center;">5</td>
           <td style="padding:14px 16px;text-align:center;color:#6B4226;">120 €/mois (1 440 €/an)</td>
-          <td style="padding:14px 16px;text-align:center;font-weight:700;color:#D62900;">7 500 €/an</td>
+          <td style="padding:14px 16px;text-align:center;font-weight:700;color:#D62900;">2 000 €/an</td>
           <td style="padding:14px 16px;text-align:center;">+ 1 000 €</td>
-          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#D62900;">9 940 €/an</td>
-          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#6B4226;">8 940 €/an</td>
+          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#D62900;">4 440 €/an</td>
+          <td style="padding:14px 20px;text-align:center;font-weight:700;color:#6B4226;">3 440 €/an</td>
         </tr>
         <tr>
           <td style="padding:14px 20px;font-weight:700;">Sur mesure</td>
