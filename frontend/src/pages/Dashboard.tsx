@@ -1,6 +1,6 @@
 import { DashboardOverview } from "@/components/dashboard/DashboardOverview";
 
-type DashScope = "year" | "month" | "week" | "day";
+type DashScope = "year" | "month" | "week" | "day" | "custom";
 type Restaurant = { id: number; code: string; name: string };
 type DailyStatus = {
   loading: boolean;
@@ -18,6 +18,8 @@ type Totals = {
   mpN1: number;
   caDelivery: number;
   caDeliveryN1: number;
+  caDrive: number;
+  caDriveN1: number;
   caCnc: number;
   caCncN1: number;
   caMagasin: number;
@@ -61,7 +63,7 @@ type HoveredTrend = {
 } | null;
 type ChannelRow = { label: string; value: number; share: number };
 type ChannelTrendSeries = {
-  key: "magasin" | "delivery" | "cnc";
+  key: "magasin" | "drive" | "delivery" | "cnc";
   label: string;
   color: string;
   n: number[];

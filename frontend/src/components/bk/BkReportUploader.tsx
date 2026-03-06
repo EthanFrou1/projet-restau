@@ -101,7 +101,6 @@ export function BkReportUploader({
       heuresTravail: "",
       tauxHoraire: "18,60",
       osat: "",
-      gxi: "",
       google: "",
     }),
     []
@@ -466,7 +465,6 @@ export function BkReportUploader({
       heuresTravail: string;
       tauxHoraire: string;
       osat: string;
-      gxi: string;
       google: string;
     };
   }) {
@@ -486,7 +484,6 @@ export function BkReportUploader({
       if (payload.extraKpiDraft.heuresTravail.trim()) fd.append("heures_travail", payload.extraKpiDraft.heuresTravail.trim());
       if (payload.extraKpiDraft.tauxHoraire.trim()) fd.append("taux_horaire", payload.extraKpiDraft.tauxHoraire.trim());
       if (payload.extraKpiDraft.osat.trim()) fd.append("osat_score", payload.extraKpiDraft.osat.trim());
-      if (payload.extraKpiDraft.gxi.trim()) fd.append("gxi_score", payload.extraKpiDraft.gxi.trim());
       if (payload.extraKpiDraft.google.trim()) fd.append("google_score", payload.extraKpiDraft.google.trim());
       if (replaceMode && selectedReportId) fd.append("is_reimport", "true");
 

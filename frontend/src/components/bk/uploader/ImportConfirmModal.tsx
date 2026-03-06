@@ -9,7 +9,6 @@ type ExtraKpiDraft = {
   heuresTravail: string;
   tauxHoraire: string;
   osat: string;
-  gxi: string;
   google: string;
 };
 
@@ -79,7 +78,6 @@ export function ImportConfirmModal({
       extraKpiDraft.heuresTravail,
       extraKpiDraft.tauxHoraire,
       extraKpiDraft.osat,
-      extraKpiDraft.gxi,
       extraKpiDraft.google,
     ];
     return values.every((value) => parseNumericValue(value) !== null);
@@ -212,22 +210,6 @@ export function ImportConfirmModal({
                     }))
                   }
                   placeholder="OSAT (%)"
-                  inputMode="decimal"
-                  disabled={uploading}
-                />
-              </label>
-              <label className="space-y-1">
-                <div className="text-xs text-muted-foreground">GXI</div>
-                <input
-                  className={`${inputClass} w-full`}
-                  value={extraKpiDraft.gxi}
-                  onChange={(e) =>
-                    setExtraKpiDraft((prev) => ({
-                      ...prev,
-                      gxi: sanitizeDecimalInput(e.target.value),
-                    }))
-                  }
-                  placeholder="GXI"
                   inputMode="decimal"
                   disabled={uploading}
                 />

@@ -1,6 +1,7 @@
 from app.models.user import User
 from app.models.restaurant import Restaurant
 from app.models.audit_log import AuditLog
+from app.models.budget import BudgetDaily
 from app.models.bk_report import (
     BKDailyReport,
     BKChannelSales,
@@ -18,6 +19,7 @@ __all__ = [
     "User",
     "Restaurant",
     "AuditLog",
+    "BudgetDaily",
     "BKDailyReport",
     "BKChannelSales",
     "BKConsumptionMode",

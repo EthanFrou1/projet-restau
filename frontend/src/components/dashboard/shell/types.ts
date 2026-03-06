@@ -34,6 +34,10 @@ export type MonthlyItem = {
     ca_delivery_n1: number | null;
     client_delivery: number | null;
     client_delivery_n1: number | null;
+    ca_drive: number | null;
+    ca_drive_n1: number | null;
+    client_drive: number | null;
+    client_drive_n1: number | null;
     ca_click_collect: number | null;
     cnc_n1: number | null;
     client_click_collect: number | null;
@@ -58,6 +62,7 @@ export type PeriodN1 = {
   ca: number;
   clients: number;
   ca_delivery: number;
+  ca_drive: number;
   ca_click_collect: number;
   marge: number;
   pertes_montant: number;
@@ -69,6 +74,7 @@ export type PrevItem = {
   ca: number;
   clients: number;
   ca_delivery: number;
+  ca_drive: number;
   ca_click_collect: number;
   marge: number;
   pertes_montant: number;
@@ -101,6 +107,7 @@ export type TabValue =
   | "bk-monthly"
   | "bk-compare"
   | "executive"
+  | "budget"
   | "dev";
 
-export type DashScope = "year" | "month" | "week" | "day";
+export type DashScope = "year" | "month" | "week" | "day" | "custom";

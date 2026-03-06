@@ -240,6 +240,12 @@ def upload_bk_report(
     client_delivery = _sum_int(
         [r["tac"] for r in channel_rows if _is_group(r["channel_label"], "HOME DELIVERY")]
     )
+    ca_drive = _sum_decimal(
+        [r["ca_net"] for r in channel_rows if _is_group(r["channel_label"], "DRIVE")]
+    )
+    client_drive = _sum_int(
+        [r["tac"] for r in channel_rows if _is_group(r["channel_label"], "DRIVE")]
+    )
     ca_click_collect = _sum_decimal(
         [r["ca_net"] for r in channel_rows if _is_group(r["channel_label"], "CLICK & COLLECT")]
     )
@@ -253,6 +259,8 @@ def upload_bk_report(
         clients=clients,
         ca_delivery=ca_delivery,
         client_delivery=client_delivery,
+        ca_drive=ca_drive,
+        client_drive=client_drive,
         ca_click_collect=ca_click_collect,
         client_click_collect=client_click_collect,
     )
@@ -520,6 +528,16 @@ def list_bk_reports_monthly(
             for r in report.channel_sales
             if not r.is_total and _is_group(r.channel_label, "HOME DELIVERY")
         )
+        ca_drive = sum(
+            _safe_float(r.ca_net)
+            for r in report.channel_sales
+            if not r.is_total and _is_group(r.channel_label, "DRIVE")
+        )
+        client_drive = sum(
+            (r.tac or 0)
+            for r in report.channel_sales
+            if not r.is_total and _is_group(r.channel_label, "DRIVE")
+        )
         ca_click_collect = sum(
             _safe_float(r.ca_net)
             for r in report.channel_sales
@@ -540,6 +558,8 @@ def list_bk_reports_monthly(
             "tac_total": tac_total,
             "ca_delivery": ca_delivery,
             "client_delivery": client_delivery,
+            "ca_drive": ca_drive,
+            "client_drive": client_drive,
             "ca_click_collect": ca_click_collect,
             "client_click_collect": client_click_collect,
             "pertes_montant": pertes_montant,
@@ -592,6 +612,7 @@ def list_bk_reports_monthly(
     period_n1_ca = 0.0
     period_n1_clients = 0
     period_n1_ca_delivery = 0.0
+    period_n1_ca_drive = 0.0
     period_n1_ca_click_collect = 0.0
     period_n1_marge = 0.0
     period_n1_pertes_montant = 0.0
@@ -608,6 +629,9 @@ def list_bk_reports_monthly(
         pr_ca_delivery = _safe_float_val(
             pr_kpi.ca_delivery if pr_kpi and pr_kpi.ca_delivery is not None else pr_vals["ca_delivery"]
         )
+        pr_ca_drive = _safe_float_val(
+            pr_kpi.ca_drive if pr_kpi and pr_kpi.ca_drive is not None else pr_vals["ca_drive"]
+        )
         pr_ca_click_collect = _safe_float_val(
             pr_kpi.ca_click_collect if pr_kpi and pr_kpi.ca_click_collect is not None else pr_vals["ca_click_collect"]
         )
@@ -616,6 +640,7 @@ def list_bk_reports_monthly(
         period_n1_ca += pr_ca
         period_n1_clients += pr_clients
         period_n1_ca_delivery += pr_ca_delivery
+        period_n1_ca_drive += pr_ca_drive
         period_n1_ca_click_collect += pr_ca_click_collect
         period_n1_marge += pr_marge
         period_n1_pertes_montant += pr_pertes_montant
@@ -625,6 +650,7 @@ def list_bk_reports_monthly(
             "ca": pr_ca,
             "clients": pr_clients,
             "ca_delivery": pr_ca_delivery,
+            "ca_drive": pr_ca_drive,
             "ca_click_collect": pr_ca_click_collect,
             "marge": pr_marge,
             "pertes_montant": pr_pertes_montant,
@@ -634,6 +660,7 @@ def list_bk_reports_monthly(
         "ca": period_n1_ca,
         "clients": period_n1_clients,
         "ca_delivery": period_n1_ca_delivery,
+        "ca_drive": period_n1_ca_drive,
         "ca_click_collect": period_n1_ca_click_collect,
         "marge": period_n1_marge,
         "pertes_montant": period_n1_pertes_montant,
@@ -737,6 +764,8 @@ def list_bk_reports_monthly(
         prev_clients = None
         prev_ca_delivery = None
         prev_client_delivery = None
+        prev_ca_drive = None
+        prev_client_drive = None
         prev_ca_click_collect = None
         prev_client_click_collect = None
         prev_heures_personnel = None
@@ -768,6 +797,16 @@ def list_bk_reports_monthly(
                 prev_kpi.client_delivery
                 if prev_kpi and prev_kpi.client_delivery is not None
                 else prev_values["client_delivery"]
+            )
+            prev_ca_drive = (
+                prev_kpi.ca_drive
+                if prev_kpi and prev_kpi.ca_drive is not None
+                else prev_values["ca_drive"]
+            )
+            prev_client_drive = (
+                prev_kpi.client_drive
+                if prev_kpi and prev_kpi.client_drive is not None
+                else prev_values["client_drive"]
             )
             prev_ca_click_collect = (
                 prev_kpi.ca_click_collect
@@ -827,6 +866,10 @@ def list_bk_reports_monthly(
                     "ca_delivery_n1": prev_ca_delivery if prev_ca_delivery is not None else (kpi.ca_delivery_n1 if kpi else None),
                     "client_delivery": kpi.client_delivery if kpi and kpi.client_delivery is not None else values["client_delivery"],
                     "client_delivery_n1": prev_client_delivery if prev_client_delivery is not None else (kpi.client_delivery_n1 if kpi else None),
+                    "ca_drive": kpi.ca_drive if kpi and kpi.ca_drive is not None else values["ca_drive"],
+                    "ca_drive_n1": prev_ca_drive if prev_ca_drive is not None else (kpi.ca_drive_n1 if kpi else None),
+                    "client_drive": kpi.client_drive if kpi and kpi.client_drive is not None else values["client_drive"],
+                    "client_drive_n1": prev_client_drive if prev_client_drive is not None else (kpi.client_drive_n1 if kpi else None),
                     "ca_click_collect": kpi.ca_click_collect if kpi and kpi.ca_click_collect is not None else values["ca_click_collect"],
                     "cnc_n1": prev_ca_click_collect if prev_ca_click_collect is not None else (kpi.cnc_n1 if kpi else None),
                     "client_click_collect": kpi.client_click_collect if kpi and kpi.client_click_collect is not None else values["client_click_collect"],

@@ -1,12 +1,12 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import {
-  ArrowLeftRight,
   ChartColumnBig,
   ChartSpline,
   Database,
   LayoutDashboard,
   Shield,
   Table2,
+  Target,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,7 @@ import { ImportsPage } from "@/pages/MesImports";
 import { MonthlyPage } from "@/pages/BkMensuel";
 import { OverviewPage } from "@/pages/Dashboard";
 import { DirectionPage } from "@/pages/RevueDirection";
+import { BudgetPage } from "@/pages/Budget";
 import type { ReimportRequest } from "@/components/bk/uploader/types";
 import type { AssocUser, DevUser, UserRole } from "@/components/admin/types";
 
@@ -86,6 +87,10 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   const [dashWeek, setDashWeek] = useState(String(getIsoWeekNumber(new Date())).padStart(2, "0"));
   const [dashDayFrom, setDashDayFrom] = useState(String(new Date().getDate()).padStart(2, "0"));
   const [dashDayTo, setDashDayTo] = useState(String(new Date().getDate()).padStart(2, "0"));
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const tomorrowIso = (() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10); })();
+  const [dashCustomFrom, setDashCustomFrom] = useState(todayIso);
+  const [dashCustomTo, setDashCustomTo] = useState(tomorrowIso);
   const [dashRestaurant, setDashRestaurant] = useState("");
   const [dashItems, setDashItems] = useState<MonthlyItem[]>([]);
   const [dashPeriodN1List, setDashPeriodN1List] = useState<PeriodN1[]>([]);
@@ -171,8 +176,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         canImportData ? { value: "data", label: "Mes imports", icon: Database } : null,
         canViewGlobalBk ? { value: "bk-global", label: "Historiques des imports", icon: ChartSpline } : null,
         canViewGlobalBk ? { value: "bk-monthly", label: "Tableau de données", icon: Table2 } : null,
-        canViewGlobalBk ? { value: "bk-compare", label: "Comparaison", icon: ArrowLeftRight } : null,
         canViewGlobalBk ? { value: "executive", label: "Données globales", icon: ChartColumnBig } : null,
+        canViewGlobalBk ? { value: "budget", label: "Budget", icon: Target } : null,
         canAccessDev ? { value: "dev", label: "Administration", icon: Shield } : null,
       ].filter(
         (
@@ -448,7 +453,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   const dayToOptions = useMemo(() => {
     const from = Number(dashDayFrom);
     if (!from) return dayOptions;
-    return dayOptions.filter((day) => Number(day) >= from);
+    return dayOptions.filter((day) => Number(day) > from);
   }, [dashDayFrom, dayOptions]);
 
   useEffect(() => {
@@ -485,6 +490,12 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       const monthPrefix = `${dashYear}-${dashMonth}`;
       return dashItems.filter((item) => item.report_date.startsWith(monthPrefix));
     }
+    if (dashScope === "custom") {
+      if (!dashCustomFrom || !dashCustomTo) return [];
+      const from = dashCustomFrom <= dashCustomTo ? dashCustomFrom : dashCustomTo;
+      const to = dashCustomFrom <= dashCustomTo ? dashCustomTo : dashCustomFrom;
+      return dashItems.filter((item) => item.report_date >= from && item.report_date <= to);
+    }
     const from = Number(dashDayFrom);
     const to = Number(dashDayTo);
     if (!from || !to) return [];
@@ -493,12 +504,13 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     const fromIso = `${dashYear}-${dashMonth}-${String(start).padStart(2, "0")}`;
     const toIso = `${dashYear}-${dashMonth}-${String(end).padStart(2, "0")}`;
     return dashItems.filter((item) => item.report_date >= fromIso && item.report_date <= toIso);
-  }, [dashDayFrom, dashDayTo, dashItems, dashMonth, dashScope, dashYear, selectedWeekRange]);
+  }, [dashCustomFrom, dashCustomTo, dashDayFrom, dashDayTo, dashItems, dashMonth, dashScope, dashYear, selectedWeekRange]);
 
   const dashTotals = useMemo(() => {
     let ca = 0;
     let clients = 0;
     let caDelivery = 0;
+    let caDrive = 0;
     let caCnc = 0;
     let marge = 0;
     let pertesMontant = 0;
@@ -507,6 +519,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       ca += kpi?.ca_real ?? item.ca_net_total ?? 0;
       clients += kpi?.clients ?? item.tac_total ?? 0;
       caDelivery += kpi?.ca_delivery ?? 0;
+      caDrive += kpi?.ca_drive ?? 0;
       caCnc += kpi?.ca_click_collect ?? 0;
       marge += item.marge ?? 0;
       pertesMontant += item.pertes_montant ?? 0;
@@ -519,6 +532,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     let caN1 = 0;
     let clientsN1 = 0;
     let caDeliveryN1 = 0;
+    let caDriveN1 = 0;
     let caCncN1 = 0;
     let margeN1 = 0;
     let pertesMontantN1 = 0;
@@ -527,6 +541,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         caN1 += p.ca;
         clientsN1 += p.clients;
         caDeliveryN1 += p.ca_delivery;
+        caDriveN1 += p.ca_drive ?? 0;
         caCncN1 += p.ca_click_collect;
         margeN1 += p.marge;
         pertesMontantN1 += p.pertes_montant;
@@ -546,6 +561,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
           caN1 += p.ca;
           clientsN1 += p.clients;
           caDeliveryN1 += p.ca_delivery;
+          caDriveN1 += p.ca_drive ?? 0;
           caCncN1 += p.ca_click_collect;
           margeN1 += p.marge;
           pertesMontantN1 += p.pertes_montant;
@@ -557,6 +573,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         caN1 += kpi?.n1_ht ?? 0;
         clientsN1 += kpi?.clients_n1 ?? 0;
         caDeliveryN1 += kpi?.ca_delivery_n1 ?? 0;
+        caDriveN1 += kpi?.ca_drive_n1 ?? 0;
         caCncN1 += kpi?.cnc_n1 ?? 0;
         margeN1 += item.marge_n1 ?? 0;
         pertesMontantN1 += item.pertes_montant_n1 ?? 0;
@@ -565,8 +582,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
 
     const mp = clients ? ca / clients : 0;
     const mpN1 = clientsN1 ? caN1 / clientsN1 : 0;
-    const caMagasin = Math.max(0, ca - caDelivery - caCnc);
-    const caMagasinN1 = Math.max(0, caN1 - caDeliveryN1 - caCncN1);
+    const caMagasin = Math.max(0, ca - caDelivery - caDrive - caCnc);
+    const caMagasinN1 = Math.max(0, caN1 - caDeliveryN1 - caDriveN1 - caCncN1);
     const tauxPertes = ca ? pertesMontant / ca : 0;
     const tauxPertesN1 = caN1 ? pertesMontantN1 / caN1 : 0;
     return {
@@ -578,6 +595,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       mpN1,
       caDelivery,
       caDeliveryN1,
+      caDrive,
+      caDriveN1,
       caCnc,
       caCncN1,
       caMagasin,
@@ -682,6 +701,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
   const channelBreakdown = useMemo(() => {
     const rows = [
       { label: "Magasin", value: dashTotals.caMagasin },
+      { label: "Drive", value: dashTotals.caDrive },
       { label: "Delivery", value: dashTotals.caDelivery },
       { label: "Click & Collect", value: dashTotals.caCnc },
     ];
@@ -690,20 +710,23 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       ...row,
       share: total > 0 ? row.value / total : 0,
     }));
-  }, [dashTotals.caCnc, dashTotals.caDelivery, dashTotals.caMagasin]);
+  }, [dashTotals.caCnc, dashTotals.caDelivery, dashTotals.caDrive, dashTotals.caMagasin]);
   const channelBreakdownN1 = useMemo(() => {
     let caN1 = 0;
     let caDeliveryN1 = 0;
+    let caDriveN1 = 0;
     let caCncN1 = 0;
     for (const item of scopedDashItems) {
       const kpi = item.kpi;
       caN1 += kpi?.n1_ht ?? 0;
       caDeliveryN1 += kpi?.ca_delivery_n1 ?? 0;
+      caDriveN1 += kpi?.ca_drive_n1 ?? 0;
       caCncN1 += kpi?.cnc_n1 ?? 0;
     }
-    const caMagasinN1 = Math.max(0, caN1 - caDeliveryN1 - caCncN1);
+    const caMagasinN1 = Math.max(0, caN1 - caDeliveryN1 - caDriveN1 - caCncN1);
     const rows = [
       { label: "Magasin", value: caMagasinN1 },
+      { label: "Drive", value: caDriveN1 },
       { label: "Delivery", value: caDeliveryN1 },
       { label: "Click & Collect", value: caCncN1 },
     ];
@@ -725,6 +748,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       commentsN1: [] as Array<string | null>,
       series: [
         { key: "magasin" as const, label: "Magasin", color: "#0f766e", n: [] as number[], n1: [] as number[] },
+        { key: "drive" as const, label: "Drive", color: "#8b5cf6", n: [] as number[], n1: [] as number[] },
         { key: "delivery" as const, label: "Delivery", color: "#3b82f6", n: [] as number[], n1: [] as number[] },
         { key: "cnc" as const, label: "Click & Collect", color: "#f59e0b", n: [] as number[], n1: [] as number[] },
       ],
@@ -737,6 +761,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         totalN1: number;
         deliveryN: number;
         deliveryN1: number;
+        driveN: number;
+        driveN1: number;
         cncN: number;
         cncN1: number;
         commentN: string | null;
@@ -750,6 +776,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         totalN1: 0,
         deliveryN: 0,
         deliveryN1: 0,
+        driveN: 0,
+        driveN1: 0,
         cncN: 0,
         cncN1: 0,
         commentN: null,
@@ -760,6 +788,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       prev.totalN1 += kpi?.n1_ht ?? 0;
       prev.deliveryN += kpi?.ca_delivery ?? 0;
       prev.deliveryN1 += kpi?.ca_delivery_n1 ?? 0;
+      prev.driveN += kpi?.ca_drive ?? 0;
+      prev.driveN1 += kpi?.ca_drive_n1 ?? 0;
       prev.cncN += kpi?.ca_click_collect ?? 0;
       prev.cncN1 += kpi?.cnc_n1 ?? 0;
       prev.commentN = mergeComment(prev.commentN, item.comment ?? null);
@@ -772,19 +802,23 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       totalN1: number;
       deliveryN: number;
       deliveryN1: number;
+      driveN: number;
+      driveN1: number;
       cncN: number;
       cncN1: number;
       commentN: string | null;
       commentN1: string | null;
     }) => {
-      const magasinN = Math.max(0, values.totalN - values.deliveryN - values.cncN);
-      const magasinN1 = Math.max(0, values.totalN1 - values.deliveryN1 - values.cncN1);
+      const magasinN = Math.max(0, values.totalN - values.deliveryN - values.driveN - values.cncN);
+      const magasinN1 = Math.max(0, values.totalN1 - values.deliveryN1 - values.driveN1 - values.cncN1);
       empty.series[0].n.push(magasinN);
       empty.series[0].n1.push(magasinN1);
-      empty.series[1].n.push(values.deliveryN);
-      empty.series[1].n1.push(values.deliveryN1);
-      empty.series[2].n.push(values.cncN);
-      empty.series[2].n1.push(values.cncN1);
+      empty.series[1].n.push(values.driveN);
+      empty.series[1].n1.push(values.driveN1);
+      empty.series[2].n.push(values.deliveryN);
+      empty.series[2].n1.push(values.deliveryN1);
+      empty.series[3].n.push(values.cncN);
+      empty.series[3].n1.push(values.cncN1);
       empty.commentsN.push(values.commentN);
       empty.commentsN1.push(values.commentN1);
     };
@@ -800,6 +834,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         totalN1: 0,
         deliveryN: 0,
         deliveryN1: 0,
+        driveN: 0,
+        driveN1: 0,
         cncN: 0,
         cncN1: 0,
         commentN: null as string | null,
@@ -813,6 +849,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         monthBuckets[monthIdx].totalN1 += kpi?.n1_ht ?? 0;
         monthBuckets[monthIdx].deliveryN += kpi?.ca_delivery ?? 0;
         monthBuckets[monthIdx].deliveryN1 += kpi?.ca_delivery_n1 ?? 0;
+        monthBuckets[monthIdx].driveN += kpi?.ca_drive ?? 0;
+        monthBuckets[monthIdx].driveN1 += kpi?.ca_drive_n1 ?? 0;
         monthBuckets[monthIdx].cncN += kpi?.ca_click_collect ?? 0;
         monthBuckets[monthIdx].cncN1 += kpi?.cnc_n1 ?? 0;
         monthBuckets[monthIdx].commentN = mergeComment(monthBuckets[monthIdx].commentN, item.comment ?? null);
@@ -836,6 +874,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
             totalN1: 0,
             deliveryN: 0,
             deliveryN1: 0,
+            driveN: 0,
+            driveN1: 0,
             cncN: 0,
             cncN1: 0,
             commentN: null,
@@ -862,6 +902,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
             totalN1: 0,
             deliveryN: 0,
             deliveryN1: 0,
+            driveN: 0,
+            driveN1: 0,
             cncN: 0,
             cncN1: 0,
             commentN: null,
@@ -886,6 +928,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
           totalN1: 0,
           deliveryN: 0,
           deliveryN1: 0,
+          driveN: 0,
+          driveN1: 0,
           cncN: 0,
           cncN1: 0,
           commentN: null,
@@ -1401,6 +1445,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
                 dashWeek={dashWeek}
                 dashDayFrom={dashDayFrom}
                 dashDayTo={dashDayTo}
+                dashCustomFrom={dashCustomFrom}
+                dashCustomTo={dashCustomTo}
                 dashRestaurant={dashRestaurant}
                 yearOptions={yearOptions}
                 weekOptions={weekOptions}
@@ -1413,6 +1459,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
                 onDashWeekChange={setDashWeek}
                 onDashDayFromChange={setDashDayFrom}
                 onDashDayToChange={setDashDayTo}
+                onDashCustomFromChange={setDashCustomFrom}
+                onDashCustomToChange={setDashCustomTo}
                 onDashRestaurantChange={setDashRestaurant}
               />
             ) : null}
@@ -1489,6 +1537,8 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
               restaurants={restaurants}
               openExportSignal={executiveExportSignal}
             />
+
+            <BudgetPage visible={canViewGlobalBk} restaurants={restaurants} />
 
             <DevPage
               visible={canAccessDev}

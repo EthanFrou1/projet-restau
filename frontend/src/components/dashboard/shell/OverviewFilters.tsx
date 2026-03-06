@@ -9,6 +9,8 @@ type Props = {
   dashWeek: string;
   dashDayFrom: string;
   dashDayTo: string;
+  dashCustomFrom: string;
+  dashCustomTo: string;
   dashRestaurant: string;
   yearOptions: number[];
   weekOptions: string[];
@@ -21,6 +23,8 @@ type Props = {
   onDashWeekChange: (value: string) => void;
   onDashDayFromChange: (value: string) => void;
   onDashDayToChange: (value: string) => void;
+  onDashCustomFromChange: (value: string) => void;
+  onDashCustomToChange: (value: string) => void;
   onDashRestaurantChange: (value: string) => void;
 };
 
@@ -31,6 +35,8 @@ export function OverviewFilters({
   dashWeek,
   dashDayFrom,
   dashDayTo,
+  dashCustomFrom,
+  dashCustomTo,
   dashRestaurant,
   yearOptions,
   weekOptions,
@@ -43,6 +49,8 @@ export function OverviewFilters({
   onDashWeekChange,
   onDashDayFromChange,
   onDashDayToChange,
+  onDashCustomFromChange,
+  onDashCustomToChange,
   onDashRestaurantChange,
 }: Props) {
   return (
@@ -55,6 +63,7 @@ export function OverviewFilters({
             <option value="month">Mois</option>
             <option value="week">Semaine</option>
             <option value="day">Jour</option>
+            <option value="custom">Période libre</option>
           </select>
         </div>
         <div className="w-full space-y-1 sm:w-[120px]">
@@ -117,6 +126,33 @@ export function OverviewFilters({
                 </option>
               ))}
             </select>
+          </div>
+        ) : null}
+        {dashScope === "custom" ? (
+          <div className="w-full space-y-1 sm:w-[140px]">
+            <div className="text-xs text-muted-foreground">Du</div>
+            <input
+              type="date"
+              className={selectClass}
+              value={dashCustomFrom}
+              onChange={(e) => onDashCustomFromChange(e.target.value)}
+            />
+          </div>
+        ) : null}
+        {dashScope === "custom" ? (
+          <div className="w-full space-y-1 sm:w-[140px]">
+            <div className="text-xs text-muted-foreground">Au</div>
+            <input
+              type="date"
+              className={selectClass}
+              value={dashCustomTo}
+              min={dashCustomFrom ? (() => {
+                const d = new Date(dashCustomFrom);
+                d.setDate(d.getDate() + 1);
+                return d.toISOString().slice(0, 10);
+              })() : undefined}
+              onChange={(e) => onDashCustomToChange(e.target.value)}
+            />
           </div>
         ) : null}
         <div className="w-full space-y-1 sm:w-[260px]">

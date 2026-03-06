@@ -85,6 +85,7 @@ export default function App() {
       <Route path="/tableau-de-donnees" element={<DashboardShell onLoggedOut={() => setIsLogged(false)} />} />
       <Route path="/comparaison" element={<DashboardShell onLoggedOut={() => setIsLogged(false)} />} />
       <Route path="/donnees-globales" element={<DashboardShell onLoggedOut={() => setIsLogged(false)} />} />
+      <Route path="/budget" element={<DashboardShell onLoggedOut={() => setIsLogged(false)} />} />
       <Route path="/administration" element={<DashboardShell onLoggedOut={() => setIsLogged(false)} />} />
       <Route path="/dev" element={<Navigate to="/administration" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

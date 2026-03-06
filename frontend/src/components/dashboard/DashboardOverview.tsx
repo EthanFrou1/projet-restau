@@ -3,8 +3,7 @@ import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DailyImportBanner } from "@/components/dashboard/DailyImportBanner";
-
-type DashScope = "year" | "month" | "week" | "day";
+import type { DashScope } from "@/components/dashboard/shell/types";
 type Restaurant = { id: number; code: string; name: string };
 type DailyStatus = {
   loading: boolean;
@@ -22,6 +21,8 @@ type Totals = {
   mpN1: number;
   caDelivery: number;
   caDeliveryN1: number;
+  caDrive: number;
+  caDriveN1: number;
   caCnc: number;
   caCncN1: number;
   caMagasin: number;
@@ -65,7 +66,7 @@ type HoveredTrend = {
 } | null;
 type ChannelRow = { label: string; value: number; share: number };
 type ChannelTrendSeries = {
-  key: "magasin" | "delivery" | "cnc";
+  key: "magasin" | "drive" | "delivery" | "cnc";
   label: string;
   color: string;
   n: number[];
@@ -169,7 +170,7 @@ export function DashboardOverview({
   const [hoveredRevenueColumnIndex, setHoveredRevenueColumnIndex] = useState<number | null>(null);
   const [hoveredSalesColumnIndex, setHoveredSalesColumnIndex] = useState<number | null>(null);
   const [hoveredBasketColumnIndex, setHoveredBasketColumnIndex] = useState<number | null>(null);
-  const channelColors = ["#0f766e", "#3b82f6", "#f59e0b"];
+  const channelColors = ["#0f766e", "#8b5cf6", "#3b82f6", "#f59e0b"];
   const revenueColumnWidthClass =
     dashScope === "month"
       ? "w-12 shrink-0"
@@ -247,13 +248,19 @@ export function DashboardOverview({
             label: "CA delivery",
             value: compactMoneyFmt.format(dashTotals.caDelivery),
             change: pctChange(dashTotals.caDelivery, dashTotals.caDeliveryN1),
+            color: channelColors[2],
+          },
+          {
+            label: "CA Drive",
+            value: compactMoneyFmt.format(dashTotals.caDrive),
+            change: pctChange(dashTotals.caDrive, dashTotals.caDriveN1),
             color: channelColors[1],
           },
           {
             label: "CA Click & Collect",
             value: compactMoneyFmt.format(dashTotals.caCnc),
             change: pctChange(dashTotals.caCnc, dashTotals.caCncN1),
-            color: channelColors[2],
+            color: channelColors[3],
           },
           {
             label: "CA Magasin",
@@ -341,14 +348,33 @@ export function DashboardOverview({
           },
           {
             label: "GXI",
-            value:
-              workforceQuickMetrics.gxi !== null
-                ? workforceQuickMetrics.gxi.toLocaleString("fr-FR", { maximumFractionDigits: 2 })
-                : "—",
-            change:
-              workforceQuickMetrics.gxi !== null && workforceQuickMetrics.gxiN1 !== null
-                ? pctChange(workforceQuickMetrics.gxi, workforceQuickMetrics.gxiN1)
-                : null,
+            value: (() => {
+              const g = workforceQuickMetrics.google;
+              const o = workforceQuickMetrics.osat;
+              if (g !== null && o !== null) {
+                const composite = (g / 5 * 100) * 0.8 + o * 0.2;
+                return `${composite.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`;
+              }
+              if (workforceQuickMetrics.gxi !== null) {
+                return `${workforceQuickMetrics.gxi.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`;
+              }
+              return "—";
+            })(),
+            change: (() => {
+              const g = workforceQuickMetrics.google;
+              const gN1 = workforceQuickMetrics.googleN1;
+              const o = workforceQuickMetrics.osat;
+              const oN1 = workforceQuickMetrics.osatN1;
+              if (g !== null && o !== null && gN1 !== null && oN1 !== null) {
+                const composite = (g / 5 * 100) * 0.8 + o * 0.2;
+                const compositeN1 = (gN1 / 5 * 100) * 0.8 + oN1 * 0.2;
+                return pctChange(composite, compositeN1);
+              }
+              if (workforceQuickMetrics.gxi !== null && workforceQuickMetrics.gxiN1 !== null) {
+                return pctChange(workforceQuickMetrics.gxi, workforceQuickMetrics.gxiN1);
+              }
+              return null;
+            })(),
             color: undefined,
           },
           {
@@ -1036,7 +1062,7 @@ export function DashboardOverview({
                     </div>
                   </div>
                   <div className="relative hidden lg:block w-px self-stretch bg-border/70" aria-hidden="true">
-                    <div className="absolute top-[65px] left-1/2 flex -translate-x-1/2 flex-col items-center gap-10">
+                    <div className="absolute top-[50px] left-1/2 flex -translate-x-1/2 flex-col items-center gap-10">
                       {channelBreakdown.map((row, idx) => {
                         const change = pctChange(row.share, channelBreakdownN1[idx]?.share ?? 0);
                         const isHovered = hoveredChannelIndex === null || hoveredChannelIndex === idx;
