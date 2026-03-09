@@ -50,7 +50,7 @@ export async function me() {
 }
 
 export async function createUser(email: string, password: string, role: string) {
-  return request("/debug/create-user", {
+  return request("/admin/create-user", {
     method: "POST",
     body: JSON.stringify({ email, password, role }),
   }) as Promise<{ id: number; email: string; role: string }>;

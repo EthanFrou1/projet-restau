@@ -4,8 +4,6 @@ export const TAB_TO_PATH: Record<TabValue, string> = {
   overview: "/dashboard",
   data: "/mes-imports",
   "bk-global": "/historiques-imports",
-  "bk-monthly": "/tableau-de-donnees",
-  "bk-compare": "/comparaison",
   executive: "/donnees-globales",
   budget: "/budget",
   dev: "/administration",
@@ -14,8 +12,6 @@ export const TAB_TO_PATH: Record<TabValue, string> = {
 export function pathToTab(pathname: string): TabValue {
   if (pathname === "/mes-imports") return "data";
   if (pathname === "/historiques-imports") return "bk-global";
-  if (pathname === "/bk-mensuel" || pathname === "/tableau-de-donnees") return "bk-monthly";
-  if (pathname === "/comparaison") return "bk-compare";
   if (pathname === "/revue-direction" || pathname === "/donnees-globales") return "executive";
   if (pathname === "/budget") return "budget";
   if (pathname === "/dev" || pathname === "/administration") return "dev";

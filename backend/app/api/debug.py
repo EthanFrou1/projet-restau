@@ -15,7 +15,7 @@ from app.models.restaurant import Restaurant
 from app.core.audit import write_audit_log
 from app.core.utils import normalize_email
 
-router = APIRouter(prefix="/debug", tags=["debug"])
+router = APIRouter(prefix="/admin", tags=["admin"])
 
 class CreateUserRequest(BaseModel):
     email: EmailStr
@@ -127,6 +127,7 @@ class UserOut(BaseModel):
 
 class RestaurantOut(BaseModel):
     id: int
+    myrhis_id: int | None = None
     code: str
     name: str
 
@@ -140,6 +141,7 @@ class UserWithRestaurantsOut(BaseModel):
     restaurants: list[RestaurantOut]
 
 class RestaurantCreateIn(BaseModel):
+    myrhis_id: int | None = Field(default=None, ge=1)
     code: str = Field(min_length=2)
     name: str = Field(min_length=2)
 
@@ -213,7 +215,7 @@ def list_users_with_restaurants(
             first_name=u.first_name,
             last_name=u.last_name,
             restaurants=[
-                RestaurantOut(id=r.id, code=r.code, name=r.name)
+                RestaurantOut(id=r.id, myrhis_id=r.myrhis_id, code=r.code, name=r.name)
                 for r in ([x for x in u.restaurants if x.code in admin_codes] if _user.role == Role.ADMIN.value else u.restaurants)
             ],
         )
@@ -227,11 +229,11 @@ def list_restaurants(
 ):
     if _user.role == Role.ADMIN.value:
         return [
-            RestaurantOut(id=r.id, code=r.code, name=r.name)
+            RestaurantOut(id=r.id, myrhis_id=r.myrhis_id, code=r.code, name=r.name)
             for r in sorted(_user.restaurants, key=lambda x: x.code)
         ]
     rows = db.query(Restaurant).order_by(Restaurant.code.asc()).all()
-    return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in rows]
+    return [RestaurantOut(id=r.id, myrhis_id=r.myrhis_id, code=r.code, name=r.name) for r in rows]
 
 @router.post("/restaurants", response_model=RestaurantOut)
 def create_restaurant(
@@ -241,14 +243,24 @@ def create_restaurant(
 ):
     code = payload.code.strip().upper()
     name = payload.name.strip()
+    myrhis_id = payload.myrhis_id
     existing = db.query(Restaurant).filter(Restaurant.code == code).first()
     if existing:
         raise HTTPException(status_code=400, detail="Restaurant code already exists")
-    restaurant = Restaurant(code=code, name=name)
+    if myrhis_id is not None:
+        existing_myrhis = db.query(Restaurant).filter(Restaurant.myrhis_id == myrhis_id).first()
+        if existing_myrhis:
+            raise HTTPException(status_code=400, detail="MyRHIS restaurant already exists")
+    restaurant = Restaurant(code=code, name=name, myrhis_id=myrhis_id)
     db.add(restaurant)
     db.commit()
     db.refresh(restaurant)
-    return RestaurantOut(id=restaurant.id, code=restaurant.code, name=restaurant.name)
+    return RestaurantOut(
+        id=restaurant.id,
+        myrhis_id=restaurant.myrhis_id,
+        code=restaurant.code,
+        name=restaurant.name,
+    )
 
 @router.put("/users/{user_id}/restaurants", response_model=List[RestaurantOut])
 def set_user_restaurants(
@@ -289,13 +301,13 @@ def set_user_restaurants(
         user.restaurants = outside_scope_restaurants + scoped_restaurants
         db.commit()
         db.refresh(user)
-        return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in scoped_restaurants]
+        return [RestaurantOut(id=r.id, myrhis_id=r.myrhis_id, code=r.code, name=r.name) for r in scoped_restaurants]
 
     user.restaurants = restaurants
     db.commit()
     db.refresh(user)
 
-    return [RestaurantOut(id=r.id, code=r.code, name=r.name) for r in user.restaurants]
+    return [RestaurantOut(id=r.id, myrhis_id=r.myrhis_id, code=r.code, name=r.name) for r in user.restaurants]
 
 @router.delete("/users/{user_id}")
 def delete_user(

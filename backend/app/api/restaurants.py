@@ -20,6 +20,7 @@ def my_restaurants(
         return [
             {
                 "id": r.id,
+                "myrhis_id": r.myrhis_id,
                 "code": r.code,
                 "name": r.name,
                 "can_import": r.code in allowed_codes,
@@ -28,7 +29,13 @@ def my_restaurants(
         ]
 
     return [
-        {"id": r.id, "code": r.code, "name": r.name, "can_import": False}
+        {
+            "id": r.id,
+            "myrhis_id": r.myrhis_id,
+            "code": r.code,
+            "name": r.name,
+            "can_import": False,
+        }
         for r in user.restaurants
     ]
 
@@ -39,4 +46,4 @@ def list_restaurants(
     _user=Depends(require_roles([Role.ADMIN, Role.DEV])),
 ):
     rows = db.query(Restaurant).order_by(Restaurant.code.asc()).all()
-    return [{"id": r.id, "code": r.code, "name": r.name} for r in rows]
+    return [{"id": r.id, "myrhis_id": r.myrhis_id, "code": r.code, "name": r.name} for r in rows]

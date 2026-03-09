@@ -66,6 +66,16 @@ export type PeriodN1 = {
   ca_click_collect: number;
   marge: number;
   pertes_montant: number;
+  heures_personnel: number;
+  heures_travail: number;
+  taux_horaire_weighted: number;
+  taux_horaire_weight: number;
+  osat_total: number;
+  osat_count: number;
+  gxi_total: number;
+  gxi_count: number;
+  google_total: number;
+  google_count: number;
 };
 
 export type PrevItem = {
@@ -78,6 +88,16 @@ export type PrevItem = {
   ca_click_collect: number;
   marge: number;
   pertes_montant: number;
+  heures_personnel: number | null;
+  heures_travail: number | null;
+  taux_horaire_weighted: number;
+  taux_horaire_weight: number;
+  osat_total: number;
+  osat_count: number;
+  gxi_total: number;
+  gxi_count: number;
+  google_total: number;
+  google_count: number;
 };
 
 export type MonthlyResponse = {
@@ -88,6 +108,7 @@ export type MonthlyResponse = {
 
 export type Restaurant = {
   id: number;
+  myrhis_id?: number | null;
   code: string;
   name: string;
   can_import?: boolean;
@@ -104,8 +125,6 @@ export type TabValue =
   | "overview"
   | "data"
   | "bk-global"
-  | "bk-monthly"
-  | "bk-compare"
   | "executive"
   | "budget"
   | "dev";

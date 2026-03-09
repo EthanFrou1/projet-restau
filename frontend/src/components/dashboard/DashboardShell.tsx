@@ -5,7 +5,6 @@ import {
   Database,
   LayoutDashboard,
   Shield,
-  Table2,
   Target,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -29,14 +28,13 @@ import {
   getIsoWeekStart,
   isoWeeksInYear,
   mergeComment,
+  previousIsoDate,
   toIsoDate,
 } from "@/components/dashboard/shell/utils";
 import type { DashScope, Me, MonthlyItem, MonthlyResponse, PeriodN1, PrevItem, ReportListItem, Restaurant, TabValue } from "@/components/dashboard/shell/types";
-import { ComparisonPage } from "@/pages/Comparaison";
 import { DevPage } from "@/pages/Administration";
 import { HistoryPage } from "@/pages/HistoriquesImports";
 import { ImportsPage } from "@/pages/MesImports";
-import { MonthlyPage } from "@/pages/BkMensuel";
 import { OverviewPage } from "@/pages/Dashboard";
 import { DirectionPage } from "@/pages/RevueDirection";
 import { BudgetPage } from "@/pages/Budget";
@@ -116,13 +114,17 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     setMe(data);
   }
 
+  async function loadMyRestaurants() {
+    const rs = await getMyRestaurants();
+    setRestaurants(rs);
+  }
+
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
         await loadMe();
-        const rs = await getMyRestaurants();
-        setRestaurants(rs);
+        await loadMyRestaurants();
       } catch (error: unknown) {
         const e = error as MessageError;
         setErr(e?.message ?? "Erreur");
@@ -175,7 +177,6 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         { value: "overview", label: "Dashboard", icon: LayoutDashboard },
         canImportData ? { value: "data", label: "Mes imports", icon: Database } : null,
         canViewGlobalBk ? { value: "bk-global", label: "Historiques des imports", icon: ChartSpline } : null,
-        canViewGlobalBk ? { value: "bk-monthly", label: "Tableau de données", icon: Table2 } : null,
         canViewGlobalBk ? { value: "executive", label: "Données globales", icon: ChartColumnBig } : null,
         canViewGlobalBk ? { value: "budget", label: "Budget", icon: Target } : null,
         canAccessDev ? { value: "dev", label: "Administration", icon: Shield } : null,
@@ -199,16 +200,10 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       return "";
     }
     if (activeTab === "data") {
-      return "Suis les imports à faire aujourd'hui, traite les retards par date, puis valide les CSV restaurant par restaurant.";
+      return "Suis les imports à faire aujourd'hui à partir des données de la veille, traite les retards par date, puis valide les CSV restaurant par restaurant.";
     }
     if (activeTab === "bk-global") {
       return "Retrouve la liste des imports réalisés et relance un réimport si nécessaire.";
-    }
-    if (activeTab === "bk-monthly") {
-      return "Consulte le tableau de données mensuel détaillé avec les indicateurs de comparaison.";
-    }
-    if (activeTab === "bk-compare") {
-      return "Compare deux périodes pour suivre les écarts de performance par indicateur.";
     }
     if (activeTab === "executive") {
       return "Vue globale de pilotage avec comparatif restaurants et export PDF.";
@@ -259,8 +254,6 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     const globalTabHidden =
       (
         activeTab === "bk-global" ||
-        activeTab === "bk-monthly" ||
-        activeTab === "bk-compare" ||
         activeTab === "executive"
       ) &&
       !canViewGlobalBk;
@@ -333,35 +326,35 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     if (!canImportData) return;
     if (!restaurants) return;
     const actionableRestaurants = restaurants.filter((restaurant) => restaurant.can_import);
-    const today = toIsoDate(new Date());
+    const targetDate = previousIsoDate(toIsoDate(new Date()));
     if (actionableRestaurants.length === 0) {
       setDailyStatus({
         loading: false,
         missing: [],
-        date: today,
+        date: targetDate,
         error: null,
         noRestaurants: true,
       });
       return;
     }
-    setDailyStatus((prev) => ({ ...prev, loading: true, error: null, date: today }));
+    setDailyStatus((prev) => ({ ...prev, loading: true, error: null, date: targetDate }));
     try {
       const params = new URLSearchParams();
-      params.set("start_date", today);
-      params.set("end_date", today);
+      params.set("start_date", targetDate);
+      params.set("end_date", targetDate);
       const data = await apiFetch<ReportListItem[]>(
         `/reports/bk?${params.toString()}`
       );
       const reported = new Set(data.map((r) => r.restaurant_code));
       const missing = actionableRestaurants.filter((r) => !reported.has(r.code));
-      setDailyStatus({ loading: false, missing, date: today, error: null, noRestaurants: false });
+      setDailyStatus({ loading: false, missing, date: targetDate, error: null, noRestaurants: false });
     } catch (error: unknown) {
       const e = error as MessageError;
       setDailyStatus({
         loading: false,
         missing: [],
-        date: today,
-        error: e?.message ?? "Erreur chargement import du jour",
+        date: targetDate,
+        error: e?.message ?? "Erreur chargement import de la veille",
         noRestaurants: false,
       });
     }
@@ -505,6 +498,22 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
     const toIso = `${dashYear}-${dashMonth}-${String(end).padStart(2, "0")}`;
     return dashItems.filter((item) => item.report_date >= fromIso && item.report_date <= toIso);
   }, [dashCustomFrom, dashCustomTo, dashDayFrom, dashDayTo, dashItems, dashMonth, dashScope, dashYear, selectedWeekRange]);
+  const shiftedPrevItems = useMemo(() => {
+    const targetYear = Number(dashYear);
+    const byShiftedDate = new Map<string, { ca: number; clients: number }>();
+    if (!targetYear) return byShiftedDate;
+    for (const item of dashPrevItems) {
+      const parts = item.report_date?.split("-") ?? [];
+      if (parts.length !== 3) continue;
+      const [, month, day] = parts;
+      const shiftedIso = `${targetYear}-${month}-${day}`;
+      const current = byShiftedDate.get(shiftedIso) ?? { ca: 0, clients: 0 };
+      current.ca += item.ca ?? 0;
+      current.clients += item.clients ?? 0;
+      byShiftedDate.set(shiftedIso, current);
+    }
+    return byShiftedDate;
+  }, [dashPrevItems, dashYear]);
 
   const dashTotals = useMemo(() => {
     let ca = 0;
@@ -676,9 +685,70 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         googleTotal += kpi.google_score;
         googleCount += 1;
       }
-      if (kpi.google_score_n1 !== null && kpi.google_score_n1 !== undefined) {
-        googleTotalN1 += kpi.google_score_n1;
-        googleCountN1 += 1;
+    }
+
+    if (dashScope === "month" || dashScope === "year") {
+      for (const period of dashPeriodN1List) {
+        heuresPersonnelN1 += period.heures_personnel ?? 0;
+        heuresTravailN1 += period.heures_travail ?? 0;
+        tauxHoraireWeightedN1 += period.taux_horaire_weighted ?? 0;
+        tauxHoraireWeightN1 += period.taux_horaire_weight ?? 0;
+        osatTotalN1 += period.osat_total ?? 0;
+        osatCountN1 += period.osat_count ?? 0;
+        gxiTotalN1 += period.gxi_total ?? 0;
+        gxiCountN1 += period.gxi_count ?? 0;
+        googleTotalN1 += period.google_total ?? 0;
+        googleCountN1 += period.google_count ?? 0;
+      }
+    } else if (dashScope === "week" && selectedWeekRange) {
+      const prevYear = Number(dashYear) - 1;
+      const weekNum = Number(dashWeek);
+      const prevWeekStart = getIsoWeekStart(prevYear, weekNum);
+      const prevWeekEnd = new Date(prevWeekStart);
+      prevWeekEnd.setUTCDate(prevWeekStart.getUTCDate() + 6);
+      const prevStartIso = prevWeekStart.toISOString().slice(0, 10);
+      const prevEndIso = prevWeekEnd.toISOString().slice(0, 10);
+      for (const item of dashPrevItems) {
+        if (!item?.report_date) continue;
+        if (item.report_date < prevStartIso || item.report_date > prevEndIso) continue;
+        heuresPersonnelN1 += item.heures_personnel ?? 0;
+        heuresTravailN1 += item.heures_travail ?? 0;
+        tauxHoraireWeightedN1 += item.taux_horaire_weighted ?? 0;
+        tauxHoraireWeightN1 += item.taux_horaire_weight ?? 0;
+        osatTotalN1 += item.osat_total ?? 0;
+        osatCountN1 += item.osat_count ?? 0;
+        gxiTotalN1 += item.gxi_total ?? 0;
+        gxiCountN1 += item.gxi_count ?? 0;
+        googleTotalN1 += item.google_total ?? 0;
+        googleCountN1 += item.google_count ?? 0;
+      }
+    } else {
+      for (const item of scopedDashItems) {
+        const kpi = item.kpi;
+        if (!kpi) continue;
+        if (kpi.heures_personnel_n1 !== null && kpi.heures_personnel_n1 !== undefined) {
+          heuresPersonnelN1 += kpi.heures_personnel_n1;
+        }
+        if (kpi.heures_travail_n1 !== null && kpi.heures_travail_n1 !== undefined) {
+          heuresTravailN1 += kpi.heures_travail_n1;
+        }
+        if (kpi.taux_horaire_n1 !== null && kpi.taux_horaire_n1 !== undefined) {
+          const weightN1 = kpi.heures_travail_n1 ?? 1;
+          tauxHoraireWeightedN1 += kpi.taux_horaire_n1 * weightN1;
+          tauxHoraireWeightN1 += weightN1;
+        }
+        if (kpi.osat_score_n1 !== null && kpi.osat_score_n1 !== undefined) {
+          osatTotalN1 += kpi.osat_score_n1;
+          osatCountN1 += 1;
+        }
+        if (kpi.gxi_score_n1 !== null && kpi.gxi_score_n1 !== undefined) {
+          gxiTotalN1 += kpi.gxi_score_n1;
+          gxiCountN1 += 1;
+        }
+        if (kpi.google_score_n1 !== null && kpi.google_score_n1 !== undefined) {
+          googleTotalN1 += kpi.google_score_n1;
+          googleCountN1 += 1;
+        }
       }
     }
 
@@ -696,7 +766,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       google: googleCount > 0 ? googleTotal / googleCount : null,
       googleN1: googleCountN1 > 0 ? googleTotalN1 / googleCountN1 : null,
     };
-  }, [scopedDashItems]);
+  }, [scopedDashItems, dashScope, dashPeriodN1List, dashPrevItems, dashYear, dashWeek, selectedWeekRange]);
 
   const channelBreakdown = useMemo(() => {
     const rows = [
@@ -953,9 +1023,12 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         const monthIdx = Number(item.report_date.slice(5, 7)) - 1;
         if (monthIdx < 0 || monthIdx > 11) continue;
         n[monthIdx] += item.kpi?.ca_real ?? item.ca_net_total ?? 0;
-        n1[monthIdx] += item.kpi?.n1_ht ?? 0;
         commentsN[monthIdx] = mergeComment(commentsN[monthIdx], item.comment ?? null);
-        commentsN1[monthIdx] = mergeComment(commentsN1[monthIdx], item.comment_n1 ?? null);
+      }
+      for (const item of dashPrevItems) {
+        const monthIdx = Number(item.report_date.slice(5, 7)) - 1;
+        if (monthIdx < 0 || monthIdx > 11) continue;
+        n1[monthIdx] += item.ca ?? 0;
       }
       return { labels, n, n1, commentsN, commentsN1 };
     }
@@ -967,13 +1040,11 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       const n1: number[] = [];
       const commentsN: Array<string | null> = [];
       const commentsN1: Array<string | null> = [];
-      const byDate = new Map<string, { n: number; n1: number; commentN: string | null; commentN1: string | null }>();
+      const byDate = new Map<string, { n: number; commentN: string | null }>();
       for (const item of scopedDashItems) {
-        const prev = byDate.get(item.report_date) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        const prev = byDate.get(item.report_date) || { n: 0, commentN: null };
         prev.n += item.kpi?.ca_real ?? item.ca_net_total ?? 0;
-        prev.n1 += item.kpi?.n1_ht ?? 0;
         prev.commentN = mergeComment(prev.commentN, item.comment ?? null);
-        prev.commentN1 = mergeComment(prev.commentN1, item.comment_n1 ?? null);
         byDate.set(item.report_date, prev);
       }
       const weekStart = new Date(`${selectedWeekRange.startIso}T00:00:00Z`);
@@ -981,12 +1052,12 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         const current = new Date(weekStart);
         current.setUTCDate(weekStart.getUTCDate() + i);
         const iso = current.toISOString().slice(0, 10);
-        const values = byDate.get(iso) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        const values = byDate.get(iso) || { n: 0, commentN: null };
         labels.push(formatIsoDayMonth(iso));
         n.push(values.n);
-        n1.push(values.n1);
+        n1.push(shiftedPrevItems.get(iso)?.ca ?? 0);
         commentsN.push(values.commentN);
-        commentsN1.push(values.commentN1);
+        commentsN1.push(null);
       }
       return { labels, n, n1, commentsN, commentsN1 };
     }
@@ -1002,24 +1073,22 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       const n1: number[] = [];
       const commentsN: Array<string | null> = [];
       const commentsN1: Array<string | null> = [];
-      const byDate = new Map<string, { n: number; n1: number; commentN: string | null; commentN1: string | null }>();
+      const byDate = new Map<string, { n: number; commentN: string | null }>();
       for (const item of scopedDashItems) {
-        const prev = byDate.get(item.report_date) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        const prev = byDate.get(item.report_date) || { n: 0, commentN: null };
         prev.n += item.kpi?.ca_real ?? item.ca_net_total ?? 0;
-        prev.n1 += item.kpi?.n1_ht ?? 0;
         prev.commentN = mergeComment(prev.commentN, item.comment ?? null);
-        prev.commentN1 = mergeComment(prev.commentN1, item.comment_n1 ?? null);
         byDate.set(item.report_date, prev);
       }
       for (let d = start; d <= end; d += 1) {
         const day = String(d).padStart(2, "0");
         const iso = `${dashYear}-${dashMonth}-${day}`;
-        const values = byDate.get(iso) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        const values = byDate.get(iso) || { n: 0, commentN: null };
         labels.push(day);
         n.push(values.n);
-        n1.push(values.n1);
+        n1.push(shiftedPrevItems.get(iso)?.ca ?? 0);
         commentsN.push(values.commentN);
-        commentsN1.push(values.commentN1);
+        commentsN1.push(null);
       }
       return { labels, n, n1, commentsN, commentsN1 };
     }
@@ -1039,15 +1108,15 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       const iso = new Date(Date.UTC(yearNum, monthNum - 1, d)).toISOString().slice(0, 10);
       const item = byDate.get(iso);
       const caReal = item?.kpi?.ca_real ?? item?.ca_net_total ?? 0;
-      const caN1 = item?.kpi?.n1_ht ?? 0;
+      const caN1 = shiftedPrevItems.get(iso)?.ca ?? 0;
       labels.push(String(d));
       n.push(caReal);
       n1.push(caN1);
       commentsN.push(item?.comment ?? null);
-      commentsN1.push(item?.comment_n1 ?? null);
+      commentsN1.push(null);
     }
     return { labels, n, n1, commentsN, commentsN1 };
-  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, scopedDashItems, selectedWeekRange]);
+  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, scopedDashItems, selectedWeekRange, dashPrevItems, shiftedPrevItems]);
 
   const salesTrend = useMemo(() => {
     if (dashScope === "year") {
@@ -1062,9 +1131,12 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         const monthIdx = Number(item.report_date.slice(5, 7)) - 1;
         if (monthIdx < 0 || monthIdx > 11) continue;
         n[monthIdx] += item.kpi?.clients ?? item.tac_total ?? 0;
-        n1[monthIdx] += item.kpi?.clients_n1 ?? 0;
         commentsN[monthIdx] = mergeComment(commentsN[monthIdx], item.comment ?? null);
-        commentsN1[monthIdx] = mergeComment(commentsN1[monthIdx], item.comment_n1 ?? null);
+      }
+      for (const item of dashPrevItems) {
+        const monthIdx = Number(item.report_date.slice(5, 7)) - 1;
+        if (monthIdx < 0 || monthIdx > 11) continue;
+        n1[monthIdx] += item.clients ?? 0;
       }
       return { labels, n, n1, commentsN, commentsN1 };
     }
@@ -1076,13 +1148,11 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       const n1: number[] = [];
       const commentsN: Array<string | null> = [];
       const commentsN1: Array<string | null> = [];
-      const byDate = new Map<string, { n: number; n1: number; commentN: string | null; commentN1: string | null }>();
+      const byDate = new Map<string, { n: number; commentN: string | null }>();
       for (const item of scopedDashItems) {
-        const prev = byDate.get(item.report_date) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        const prev = byDate.get(item.report_date) || { n: 0, commentN: null };
         prev.n += item.kpi?.clients ?? item.tac_total ?? 0;
-        prev.n1 += item.kpi?.clients_n1 ?? 0;
         prev.commentN = mergeComment(prev.commentN, item.comment ?? null);
-        prev.commentN1 = mergeComment(prev.commentN1, item.comment_n1 ?? null);
         byDate.set(item.report_date, prev);
       }
       const weekStart = new Date(`${selectedWeekRange.startIso}T00:00:00Z`);
@@ -1090,12 +1160,12 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
         const current = new Date(weekStart);
         current.setUTCDate(weekStart.getUTCDate() + i);
         const iso = current.toISOString().slice(0, 10);
-        const values = byDate.get(iso) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        const values = byDate.get(iso) || { n: 0, commentN: null };
         labels.push(formatIsoDayMonth(iso));
         n.push(values.n);
-        n1.push(values.n1);
+        n1.push(shiftedPrevItems.get(iso)?.clients ?? 0);
         commentsN.push(values.commentN);
-        commentsN1.push(values.commentN1);
+        commentsN1.push(null);
       }
       return { labels, n, n1, commentsN, commentsN1 };
     }
@@ -1111,24 +1181,22 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       const n1: number[] = [];
       const commentsN: Array<string | null> = [];
       const commentsN1: Array<string | null> = [];
-      const byDate = new Map<string, { n: number; n1: number; commentN: string | null; commentN1: string | null }>();
+      const byDate = new Map<string, { n: number; commentN: string | null }>();
       for (const item of scopedDashItems) {
-        const prev = byDate.get(item.report_date) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        const prev = byDate.get(item.report_date) || { n: 0, commentN: null };
         prev.n += item.kpi?.clients ?? item.tac_total ?? 0;
-        prev.n1 += item.kpi?.clients_n1 ?? 0;
         prev.commentN = mergeComment(prev.commentN, item.comment ?? null);
-        prev.commentN1 = mergeComment(prev.commentN1, item.comment_n1 ?? null);
         byDate.set(item.report_date, prev);
       }
       for (let d = start; d <= end; d += 1) {
         const day = String(d).padStart(2, "0");
         const iso = `${dashYear}-${dashMonth}-${day}`;
-        const values = byDate.get(iso) || { n: 0, n1: 0, commentN: null, commentN1: null };
+        const values = byDate.get(iso) || { n: 0, commentN: null };
         labels.push(day);
         n.push(values.n);
-        n1.push(values.n1);
+        n1.push(shiftedPrevItems.get(iso)?.clients ?? 0);
         commentsN.push(values.commentN);
-        commentsN1.push(values.commentN1);
+        commentsN1.push(null);
       }
       return { labels, n, n1, commentsN, commentsN1 };
     }
@@ -1148,15 +1216,15 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
       const iso = new Date(Date.UTC(yearNum, monthNum - 1, d)).toISOString().slice(0, 10);
       const item = byDate.get(iso);
       const clients = item?.kpi?.clients ?? item?.tac_total ?? 0;
-      const clientsN1 = item?.kpi?.clients_n1 ?? 0;
+      const clientsN1 = shiftedPrevItems.get(iso)?.clients ?? 0;
       labels.push(String(d));
       n.push(clients);
       n1.push(clientsN1);
       commentsN.push(item?.comment ?? null);
-      commentsN1.push(item?.comment_n1 ?? null);
+      commentsN1.push(null);
     }
     return { labels, n, n1, commentsN, commentsN1 };
-  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, scopedDashItems, selectedWeekRange]);
+  }, [dashDayFrom, dashDayTo, dashMonth, dashScope, dashYear, scopedDashItems, selectedWeekRange, dashPrevItems, shiftedPrevItems]);
 
   const basketTrend = useMemo(() => {
     const len = Math.min(dashTrend.labels.length, salesTrend.labels.length);
@@ -1399,6 +1467,7 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
             try {
               await setUserRestaurants(confirmRemoveAssoc.userId, confirmRemoveAssoc.nextCodes);
               updateAssocUser(confirmRemoveAssoc.userId, confirmRemoveAssoc.nextCodes);
+              await loadMyRestaurants();
             } catch (error: unknown) {
               const e = error as MessageError;
               setAssocMsg(e?.message ?? "Erreur suppression association");
@@ -1511,7 +1580,6 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
               visible={canImportData}
               restaurants={restaurants}
               canReplaceImport={canReplaceImport}
-              showDebugHead={isDev || isAdmin}
               pendingReimport={pendingReimport}
               onPendingReimportHandled={() => setPendingReimport(null)}
               onUploaded={() => {
@@ -1530,8 +1598,6 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
               }}
             />
 
-            <MonthlyPage visible={canViewGlobalBk} restaurants={restaurants} />
-            <ComparisonPage visible={canViewGlobalBk} restaurants={restaurants} />
             <DirectionPage
               visible={canViewGlobalBk}
               restaurants={restaurants}
@@ -1577,7 +1643,10 @@ export default function DashboardShell({ onLoggedOut }: { onLoggedOut: () => voi
                   : u.email;
                 setConfirmRemoveAssoc({ userId: u.id, userLabel, code, nextCodes });
               }}
-              onSavedAssign={(userId, codes) => updateAssocUser(userId, codes)}
+              onSavedAssign={async (userId, codes) => {
+                updateAssocUser(userId, codes);
+                await loadMyRestaurants();
+              }}
             />
           </div>
         </main>

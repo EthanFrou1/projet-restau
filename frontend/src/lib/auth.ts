@@ -1,4 +1,4 @@
-import { apiFetch, setAccessToken } from "@/lib/api";
+import { apiFetch, clearAuthState, markSessionActivity, setAccessToken } from "@/lib/api";
 
 export async function login(email: string, password: string) {
   const data = await apiFetch<{
@@ -15,14 +15,14 @@ export async function login(email: string, password: string) {
 
   setAccessToken(data.access_token);
   localStorage.setItem("expires_at", data.expires_at);
+  markSessionActivity();
   return data;
 }
 
 export async function logout() {
   // logout a besoin du Bearer (get_current_user) + supprime cookie refresh côté back
   await apiFetch<{ ok: boolean }>("/auth/logout", { method: "POST" });
-  setAccessToken(null);
-  localStorage.removeItem("expires_at");
+  clearAuthState();
 }
 
 export async function createUser(payload: {
@@ -41,7 +41,7 @@ export async function createUser(payload: {
     must_change_password: boolean;
     email_sent: boolean;
     email_error?: string | null;
-  }>("/debug/create-user", {
+  }>("/admin/create-user", {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -67,10 +67,10 @@ export async function listUsers() {
     first_name?: string | null;
     last_name?: string | null;
   }>>(
-    "/debug/users"
+    "/admin/users"
   );
 }
 
 export async function deleteUser(userId: number) {
-  return apiFetch<{ ok: boolean }>(`/debug/users/${userId}`, { method: "DELETE" });
+  return apiFetch<{ ok: boolean }>(`/admin/users/${userId}`, { method: "DELETE" });
 }

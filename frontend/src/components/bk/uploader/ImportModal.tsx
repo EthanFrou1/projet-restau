@@ -75,7 +75,7 @@ export function ImportModal({
                 onClick={onClose}
                 disabled={uploading}
                 aria-label="Fermer"
-                className="mt-0.5 shrink-0"
+                className="mt-0.5 shrink-0 border border-input"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
@@ -95,7 +95,7 @@ export function ImportModal({
               onClick={onClose}
               disabled={uploading}
               aria-label="Fermer"
-              className="shrink-0"
+              className="shrink-0 border border-input"
             >
               <X className="h-4 w-4" />
             </Button>

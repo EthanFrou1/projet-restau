@@ -4,6 +4,12 @@ export function toIsoDate(value: Date) {
   return local.toISOString().slice(0, 10);
 }
 
+export function previousIsoDate(isoDate: string) {
+  const date = new Date(`${isoDate}T00:00:00`);
+  date.setDate(date.getDate() - 1);
+  return toIsoDate(date);
+}
+
 export function getIsoWeekNumber(value: Date): number {
   const date = new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
   const day = date.getUTCDay() || 7;

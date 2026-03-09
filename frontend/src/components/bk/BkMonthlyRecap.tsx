@@ -866,10 +866,10 @@ export function BkMonthlyRecap({ restaurants }: Props) {
                 <TableHead className={`text-right ${colCncClass}`}>% CA CNC</TableHead>
                 <TableHead className="text-right">Écart caisse</TableHead>
                 <TableHead className="text-right">Écart caisse % CA</TableHead>
-                <TableHead className="text-right">Heures personnel</TableHead>
-                <TableHead className="text-right">Heures personnel N-1</TableHead>
-                <TableHead className="text-right">Heures formation</TableHead>
-                <TableHead className="text-right">Heures formation N-1</TableHead>
+                <TableHead className="text-right">Heures personnel réalisées</TableHead>
+                <TableHead className="text-right">Heures personnel réalisées N-1</TableHead>
+                <TableHead className="text-right">Heures prévues</TableHead>
+                <TableHead className="text-right">Heures prévues N-1</TableHead>
                 <TableHead className="text-right">Taux horaire (EUR)</TableHead>
                 <TableHead className="text-right">Taux horaire N-1 (EUR)</TableHead>
                 <TableHead className="text-right">OSAT (%)</TableHead>

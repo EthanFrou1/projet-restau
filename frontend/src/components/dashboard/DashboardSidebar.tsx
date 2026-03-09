@@ -81,7 +81,7 @@ export function DashboardSidebar({
             const isActive = activeTab === item.value;
             const importsLabel =
               item.value === "data" && importsTodoCount > 0
-                ? `${importsTodoCount} import${importsTodoCount > 1 ? "s" : ""} a faire aujourd'hui`
+                ? `${importsTodoCount} import${importsTodoCount > 1 ? "s" : ""} à faire aujourd'hui`
                 : null;
             const tooltipLabel = importsLabel ? `${item.label} - ${importsLabel}` : item.label;
 
@@ -112,7 +112,7 @@ export function DashboardSidebar({
                       className={`inline-flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-semibold text-white ${
                         collapsed ? "absolute -right-1 -top-1 h-5 min-w-5 px-1 text-[10px]" : "ml-auto"
                       }`}
-                      aria-label={`${importsTodoCount} import${importsTodoCount > 1 ? "s" : ""} a faire aujourd'hui`}
+                      aria-label={`${importsTodoCount} import${importsTodoCount > 1 ? "s" : ""} à faire aujourd'hui`}
                     >
                       {importsTodoCount}
                     </span>

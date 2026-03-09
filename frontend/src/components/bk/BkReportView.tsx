@@ -120,8 +120,8 @@ export function BkReportView({ report }: Props) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Heures personnel</TableHead>
-                  <TableHead>Heures formation (coût complémentaire)</TableHead>
+                  <TableHead>Heures personnel réalisées</TableHead>
+                  <TableHead>Heures prévues</TableHead>
                   <TableHead>Taux horaire (EUR)</TableHead>
                   <TableHead>OSAT (%)</TableHead>
                   <TableHead>GXI</TableHead>
@@ -310,4 +310,3 @@ export function BkReportView({ report }: Props) {
     </Card>
   );
 }
-

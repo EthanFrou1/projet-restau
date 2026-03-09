@@ -24,19 +24,16 @@ from app.models.bk_report import (
     BKRemises,
     BKTvaSummary,
 )
+from app.models.restaurant import Restaurant
+from app.integrations.myrhis.client import MyRhisClient, MyRhisClientError, MyRhisConfigError
+from app.integrations.myrhis.labor import build_labor_summary
 
 router = APIRouter(prefix="/reports/bk", tags=["reports-bk"])
 
 
 class BKDailyKpiUpdate(BaseModel):
-    n1_ht: Decimal | None = None
     var_n1: Decimal | None = None
     prev_ht: Decimal | None = None
-    clients_n1: int | None = None
-    ca_delivery_n1: Decimal | None = None
-    client_delivery_n1: int | None = None
-    cnc_n1: Decimal | None = None
-    client_n1: int | None = None
     cash_diff: Decimal | None = None
     heures_personnel: Decimal | None = None
     heures_travail: Decimal | None = None
@@ -88,6 +85,31 @@ def _read_csv_rows(file: UploadFile) -> list[dict[str, str]]:
     text = _decode_csv_bytes(raw)
     reader = csv.DictReader(StringIO(text), delimiter=";")
     return [row for row in reader]
+
+
+def _validate_decimal_range(value: Decimal | None, *, field_label: str, minimum: Decimal, maximum: Decimal) -> None:
+    if value is None:
+        return
+    if value < minimum or value > maximum:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{field_label} must be between {minimum} and {maximum}.",
+        )
+
+
+def _compute_gxi_score(google_score: Decimal | None, osat_score: Decimal | None) -> Decimal | None:
+    if google_score is None or osat_score is None:
+        return None
+    google_percent = (google_score / Decimal("5")) * Decimal("100")
+    return (google_percent * Decimal("0.8")) + (osat_score * Decimal("0.2"))
+
+
+def _effective_gxi_score(kpi: BKDailyKpi | None) -> Decimal | None:
+    if kpi is None:
+        return None
+    if kpi.gxi_score is not None:
+        return kpi.gxi_score
+    return _compute_gxi_score(kpi.google_score, kpi.osat_score)
 
 
 @router.post("/upload")
@@ -388,6 +410,47 @@ def upload_bk_report(
         "gxi_score": _parse_decimal(gxi_score),
         "google_score": _parse_decimal(google_score),
     }
+    _validate_decimal_range(
+        extra_kpi_values["osat_score"],
+        field_label="OSAT score",
+        minimum=Decimal("0"),
+        maximum=Decimal("100"),
+    )
+    _validate_decimal_range(
+        extra_kpi_values["google_score"],
+        field_label="Google score",
+        minimum=Decimal("0"),
+        maximum=Decimal("5"),
+    )
+    extra_kpi_values["gxi_score"] = _compute_gxi_score(
+        extra_kpi_values["google_score"],
+        extra_kpi_values["osat_score"],
+    )
+
+    restaurant = (
+        db.query(Restaurant)
+        .filter(Restaurant.code == normalized_code)
+        .first()
+    )
+    if restaurant and restaurant.myrhis_id:
+        client = MyRhisClient()
+        try:
+            plannings = client.get_restaurant_plannings(
+                myrhis_id=restaurant.myrhis_id,
+                date_value=report_date.isoformat(),
+            )
+            clockings = client.get_restaurant_clockings(
+                myrhis_id=restaurant.myrhis_id,
+                date_value=report_date.isoformat(),
+            )
+        except (MyRhisConfigError, MyRhisClientError) as exc:
+            raise HTTPException(status_code=502, detail=f"MyRHIS labor sync failed: {exc}") from exc
+
+        # For mapped restaurants, RH hours come from the raw MyRHIS planning/clocking payload.
+        labor_summary = build_labor_summary(plannings=plannings, clockings=clockings)
+        extra_kpi_values["heures_personnel"] = Decimal(str(labor_summary["actualHours"]))
+        extra_kpi_values["heures_travail"] = Decimal(str(labor_summary["plannedHours"]))
+
     for key, value in extra_kpi_values.items():
         setattr(kpi_row, key, value)
 
@@ -590,10 +653,6 @@ def list_bk_reports_monthly(
 
     if allowed_restaurants is not None:
         prev_query = prev_query.filter(BKDailyReport.restaurant_code.in_(allowed_restaurants))
-    elif reports:
-        codes = {r.restaurant_code.upper() for r in reports}
-        if codes:
-            prev_query = prev_query.filter(BKDailyReport.restaurant_code.in_(codes))
 
     prev_reports = prev_query.all()
     # Clé normalisée en majuscules pour matcher quel que soit la casse stockée
@@ -616,6 +675,16 @@ def list_bk_reports_monthly(
     period_n1_ca_click_collect = 0.0
     period_n1_marge = 0.0
     period_n1_pertes_montant = 0.0
+    period_n1_heures_personnel = 0.0
+    period_n1_heures_travail = 0.0
+    period_n1_taux_horaire_weighted = 0.0
+    period_n1_taux_horaire_weight = 0.0
+    period_n1_osat_total = 0.0
+    period_n1_osat_count = 0
+    period_n1_gxi_total = 0.0
+    period_n1_gxi_count = 0
+    period_n1_google_total = 0.0
+    period_n1_google_count = 0
     prev_items_list: list[dict[str, Any]] = []
     for pr in prev_reports:
         pr_kpi = pr.kpi
@@ -637,6 +706,12 @@ def list_bk_reports_monthly(
         )
         pr_marge = pr_vals["marge_total"]
         pr_pertes_montant = pr_vals["pertes_montant"]
+        pr_heures_personnel = _safe_float_val(pr_kpi.heures_personnel) if pr_kpi and pr_kpi.heures_personnel is not None else None
+        pr_heures_travail = _safe_float_val(pr_kpi.heures_travail) if pr_kpi and pr_kpi.heures_travail is not None else None
+        pr_taux_horaire = _safe_float_val(pr_kpi.taux_horaire) if pr_kpi and pr_kpi.taux_horaire is not None else None
+        pr_osat_score = _safe_float_val(pr_kpi.osat_score) if pr_kpi and pr_kpi.osat_score is not None else None
+        pr_gxi_score = _safe_float_val(_effective_gxi_score(pr_kpi)) if _effective_gxi_score(pr_kpi) is not None else None
+        pr_google_score = _safe_float_val(pr_kpi.google_score) if pr_kpi and pr_kpi.google_score is not None else None
         period_n1_ca += pr_ca
         period_n1_clients += pr_clients
         period_n1_ca_delivery += pr_ca_delivery
@@ -644,6 +719,23 @@ def list_bk_reports_monthly(
         period_n1_ca_click_collect += pr_ca_click_collect
         period_n1_marge += pr_marge
         period_n1_pertes_montant += pr_pertes_montant
+        if pr_heures_personnel is not None:
+            period_n1_heures_personnel += pr_heures_personnel
+        if pr_heures_travail is not None:
+            period_n1_heures_travail += pr_heures_travail
+        if pr_taux_horaire is not None:
+            taux_weight = pr_heures_travail if pr_heures_travail and pr_heures_travail > 0 else 1.0
+            period_n1_taux_horaire_weighted += pr_taux_horaire * taux_weight
+            period_n1_taux_horaire_weight += taux_weight
+        if pr_osat_score is not None:
+            period_n1_osat_total += pr_osat_score
+            period_n1_osat_count += 1
+        if pr_gxi_score is not None:
+            period_n1_gxi_total += pr_gxi_score
+            period_n1_gxi_count += 1
+        if pr_google_score is not None:
+            period_n1_google_total += pr_google_score
+            period_n1_google_count += 1
         prev_items_list.append({
             "restaurant_code": pr.restaurant_code,
             "report_date": pr.report_date.isoformat(),
@@ -654,6 +746,20 @@ def list_bk_reports_monthly(
             "ca_click_collect": pr_ca_click_collect,
             "marge": pr_marge,
             "pertes_montant": pr_pertes_montant,
+            "heures_personnel": pr_heures_personnel,
+            "heures_travail": pr_heures_travail,
+            "taux_horaire_weighted": (pr_taux_horaire * (pr_heures_travail if pr_heures_travail and pr_heures_travail > 0 else 1.0))
+            if pr_taux_horaire is not None
+            else 0.0,
+            "taux_horaire_weight": (pr_heures_travail if pr_heures_travail and pr_heures_travail > 0 else 1.0)
+            if pr_taux_horaire is not None
+            else 0.0,
+            "osat_total": pr_osat_score or 0.0,
+            "osat_count": 1 if pr_osat_score is not None else 0,
+            "gxi_total": pr_gxi_score or 0.0,
+            "gxi_count": 1 if pr_gxi_score is not None else 0,
+            "google_total": pr_google_score or 0.0,
+            "google_count": 1 if pr_google_score is not None else 0,
         })
 
     period_n1 = {
@@ -664,6 +770,16 @@ def list_bk_reports_monthly(
         "ca_click_collect": period_n1_ca_click_collect,
         "marge": period_n1_marge,
         "pertes_montant": period_n1_pertes_montant,
+        "heures_personnel": period_n1_heures_personnel,
+        "heures_travail": period_n1_heures_travail,
+        "taux_horaire_weighted": period_n1_taux_horaire_weighted,
+        "taux_horaire_weight": period_n1_taux_horaire_weight,
+        "osat_total": period_n1_osat_total,
+        "osat_count": period_n1_osat_count,
+        "gxi_total": period_n1_gxi_total,
+        "gxi_count": period_n1_gxi_count,
+        "google_total": period_n1_google_total,
+        "google_count": period_n1_google_count,
     }
 
     payload = []
@@ -728,7 +844,7 @@ def list_bk_reports_monthly(
                         "osat_score": None,
                         "osat_score_n1": prev_kpi.osat_score if prev_kpi else None,
                         "gxi_score": None,
-                        "gxi_score_n1": prev_kpi.gxi_score if prev_kpi else None,
+                        "gxi_score_n1": _effective_gxi_score(prev_kpi),
                         "google_score": None,
                         "google_score_n1": prev_kpi.google_score if prev_kpi else None,
                     },
@@ -822,7 +938,7 @@ def list_bk_reports_monthly(
             prev_heures_travail = prev_kpi.heures_travail if prev_kpi else None
             prev_taux_horaire = prev_kpi.taux_horaire if prev_kpi else None
             prev_osat_score = prev_kpi.osat_score if prev_kpi else None
-            prev_gxi_score = prev_kpi.gxi_score if prev_kpi else None
+            prev_gxi_score = _effective_gxi_score(prev_kpi)
             prev_google_score = prev_kpi.google_score if prev_kpi else None
             prev_marge_total = prev_values["marge_total"]
             prev_pertes_montant = prev_values["pertes_montant"]
@@ -852,7 +968,7 @@ def list_bk_reports_monthly(
                     # Priorité aux vraies données N-1 depuis la BDD (prev_report).
                     # Les valeurs stockées dans le KPI (n1_ht, clients_n1…) ne servent
                     # que de fallback quand l'année précédente n'a pas encore été importée.
-                    "n1_ht": prev_ca_real if prev_ca_real is not None else (kpi.n1_ht if kpi else None),
+                    "n1_ht": prev_ca_real,
                     "var_n1": (
                         round((ca_real_float - prev_ca_real_float) / prev_ca_real_float, 6)
                         if prev_ca_real_float
@@ -861,19 +977,19 @@ def list_bk_reports_monthly(
                     "prev_ht": kpi.prev_ht if kpi else None,
                     "ca_real": ca_real,
                     "clients": clients,
-                    "clients_n1": prev_clients if prev_clients is not None else (kpi.clients_n1 if kpi else None),
+                    "clients_n1": prev_clients,
                     "ca_delivery": kpi.ca_delivery if kpi and kpi.ca_delivery is not None else values["ca_delivery"],
-                    "ca_delivery_n1": prev_ca_delivery if prev_ca_delivery is not None else (kpi.ca_delivery_n1 if kpi else None),
+                    "ca_delivery_n1": prev_ca_delivery,
                     "client_delivery": kpi.client_delivery if kpi and kpi.client_delivery is not None else values["client_delivery"],
-                    "client_delivery_n1": prev_client_delivery if prev_client_delivery is not None else (kpi.client_delivery_n1 if kpi else None),
+                    "client_delivery_n1": prev_client_delivery,
                     "ca_drive": kpi.ca_drive if kpi and kpi.ca_drive is not None else values["ca_drive"],
-                    "ca_drive_n1": prev_ca_drive if prev_ca_drive is not None else (kpi.ca_drive_n1 if kpi else None),
+                    "ca_drive_n1": prev_ca_drive,
                     "client_drive": kpi.client_drive if kpi and kpi.client_drive is not None else values["client_drive"],
-                    "client_drive_n1": prev_client_drive if prev_client_drive is not None else (kpi.client_drive_n1 if kpi else None),
+                    "client_drive_n1": prev_client_drive,
                     "ca_click_collect": kpi.ca_click_collect if kpi and kpi.ca_click_collect is not None else values["ca_click_collect"],
-                    "cnc_n1": prev_ca_click_collect if prev_ca_click_collect is not None else (kpi.cnc_n1 if kpi else None),
+                    "cnc_n1": prev_ca_click_collect,
                     "client_click_collect": kpi.client_click_collect if kpi and kpi.client_click_collect is not None else values["client_click_collect"],
-                    "client_n1": prev_client_click_collect if prev_client_click_collect is not None else (kpi.client_n1 if kpi else None),
+                    "client_n1": prev_client_click_collect,
                     "cash_diff": kpi.cash_diff if kpi else None,
                     "heures_personnel": kpi.heures_personnel if kpi else None,
                     "heures_personnel_n1": prev_heures_personnel,
@@ -883,7 +999,7 @@ def list_bk_reports_monthly(
                     "taux_horaire_n1": prev_taux_horaire,
                     "osat_score": kpi.osat_score if kpi else None,
                     "osat_score_n1": prev_osat_score,
-                    "gxi_score": kpi.gxi_score if kpi else None,
+                    "gxi_score": _effective_gxi_score(kpi),
                     "gxi_score_n1": prev_gxi_score,
                     "google_score": kpi.google_score if kpi else None,
                     "google_score_n1": prev_google_score,
@@ -937,26 +1053,30 @@ def get_bk_report(
         "kpi": None
         if not report.kpi
         else {
-            "n1_ht": report.kpi.n1_ht,
+            "n1_ht": prev_report.kpi.ca_real if prev_report and prev_report.kpi else None,
             "var_n1": report.kpi.var_n1,
             "prev_ht": report.kpi.prev_ht,
             "ca_real": report.kpi.ca_real,
             "clients": report.kpi.clients,
-            "clients_n1": report.kpi.clients_n1,
+            "clients_n1": prev_report.kpi.clients if prev_report and prev_report.kpi else None,
             "ca_delivery": report.kpi.ca_delivery,
-            "ca_delivery_n1": report.kpi.ca_delivery_n1,
+            "ca_delivery_n1": prev_report.kpi.ca_delivery if prev_report and prev_report.kpi else None,
             "client_delivery": report.kpi.client_delivery,
-            "client_delivery_n1": report.kpi.client_delivery_n1,
+            "client_delivery_n1": prev_report.kpi.client_delivery if prev_report and prev_report.kpi else None,
+            "ca_drive": report.kpi.ca_drive,
+            "ca_drive_n1": prev_report.kpi.ca_drive if prev_report and prev_report.kpi else None,
+            "client_drive": report.kpi.client_drive,
+            "client_drive_n1": prev_report.kpi.client_drive if prev_report and prev_report.kpi else None,
             "ca_click_collect": report.kpi.ca_click_collect,
-            "cnc_n1": report.kpi.cnc_n1,
+            "cnc_n1": prev_report.kpi.ca_click_collect if prev_report and prev_report.kpi else None,
             "client_click_collect": report.kpi.client_click_collect,
-            "client_n1": report.kpi.client_n1,
+            "client_n1": prev_report.kpi.client_click_collect if prev_report and prev_report.kpi else None,
             "cash_diff": report.kpi.cash_diff,
             "heures_personnel": report.kpi.heures_personnel,
             "heures_travail": report.kpi.heures_travail,
             "taux_horaire": report.kpi.taux_horaire,
             "osat_score": report.kpi.osat_score,
-            "gxi_score": report.kpi.gxi_score,
+            "gxi_score": _effective_gxi_score(report.kpi),
             "google_score": report.kpi.google_score,
         },
         "channel_sales": [
@@ -1050,21 +1170,19 @@ def update_bk_report_kpi(
     if report.kpi is None:
         report.kpi = BKDailyKpi(report_id=report.id)
 
-    report.kpi.n1_ht = payload.n1_ht
     report.kpi.var_n1 = payload.var_n1
     report.kpi.prev_ht = payload.prev_ht
-    report.kpi.clients_n1 = payload.clients_n1
-    report.kpi.ca_delivery_n1 = payload.ca_delivery_n1
-    report.kpi.client_delivery_n1 = payload.client_delivery_n1
-    report.kpi.cnc_n1 = payload.cnc_n1
-    report.kpi.client_n1 = payload.client_n1
     report.kpi.cash_diff = payload.cash_diff
     report.kpi.heures_personnel = payload.heures_personnel
     report.kpi.heures_travail = payload.heures_travail
     report.kpi.taux_horaire = payload.taux_horaire
     report.kpi.osat_score = payload.osat_score
-    report.kpi.gxi_score = payload.gxi_score
     report.kpi.google_score = payload.google_score
+    report.kpi.gxi_score = (
+        payload.gxi_score
+        if payload.gxi_score is not None
+        else _compute_gxi_score(payload.google_score, payload.osat_score)
+    )
 
     db.add(report)
     db.commit()

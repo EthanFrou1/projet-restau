@@ -23,7 +23,7 @@ type AssocUserRow = {
 type Props = {
   users: UserRow[];
   assocUsers: AssocUserRow[];
-  onSaved?: (userId: number, restaurantCodes: string[]) => void;
+  onSaved?: (userId: number, restaurantCodes: string[]) => void | Promise<void>;
 };
 
 export function UserRestaurantAssign({ users, assocUsers, onSaved }: Props) {

@@ -203,18 +203,182 @@ export function DashboardOverview({
   );
   const workforceCostRh =
     workforceQuickMetrics.heuresPersonnel > 0 && workforceQuickMetrics.tauxHoraire !== null
-      ? workforceQuickMetrics.heuresPersonnel * workforceQuickMetrics.tauxHoraire + workforceQuickMetrics.heuresTravail
+      ? workforceQuickMetrics.heuresPersonnel * workforceQuickMetrics.tauxHoraire
       : null;
   const workforceCostRhN1 =
     workforceQuickMetrics.heuresPersonnelN1 !== null &&
-    workforceQuickMetrics.tauxHoraireN1 !== null &&
-    workforceQuickMetrics.heuresTravailN1 !== null
-      ? workforceQuickMetrics.heuresPersonnelN1 * workforceQuickMetrics.tauxHoraireN1 +
-        workforceQuickMetrics.heuresTravailN1
+    workforceQuickMetrics.tauxHoraireN1 !== null
+      ? workforceQuickMetrics.heuresPersonnelN1 * workforceQuickMetrics.tauxHoraireN1
       : null;
   const persoReelPct = workforceCostRh !== null && dashTotals.ca > 0 ? workforceCostRh / dashTotals.ca : null;
   const persoReelPctN1 =
     workforceCostRhN1 !== null && dashTotals.caN1 > 0 ? workforceCostRhN1 / dashTotals.caN1 : null;
+  const laborDeltaHours = workforceQuickMetrics.heuresPersonnel - workforceQuickMetrics.heuresTravail;
+  const laborDeltaHoursN1 =
+    workforceQuickMetrics.heuresPersonnelN1 !== null && workforceQuickMetrics.heuresTravailN1 !== null
+      ? workforceQuickMetrics.heuresPersonnelN1 - workforceQuickMetrics.heuresTravailN1
+      : null;
+  const currentGxi =
+    workforceQuickMetrics.google !== null && workforceQuickMetrics.osat !== null
+      ? (workforceQuickMetrics.google / 5) * 100 * 0.8 + workforceQuickMetrics.osat * 0.2
+      : workforceQuickMetrics.gxi;
+  const previousGxi =
+    workforceQuickMetrics.googleN1 !== null && workforceQuickMetrics.osatN1 !== null
+      ? (workforceQuickMetrics.googleN1 / 5) * 100 * 0.8 + workforceQuickMetrics.osatN1 * 0.2
+      : workforceQuickMetrics.gxiN1;
+  const kpis = [
+    {
+      label: "Chiffre d'affaires",
+      value: compactMoneyFmt.format(dashTotals.ca),
+      rawValue: dashTotals.ca,
+      previousValue: dashTotals.caN1,
+      color: undefined,
+    },
+    {
+      label: "Nombre de ventes",
+      value: intFmt.format(dashTotals.clients),
+      rawValue: dashTotals.clients,
+      previousValue: dashTotals.clientsN1,
+      color: undefined,
+    },
+    {
+      label: "Panier moyen",
+      value: moneyFmt.format(dashTotals.mp || 0),
+      rawValue: dashTotals.mp,
+      previousValue: dashTotals.mpN1,
+      color: undefined,
+    },
+    {
+      label: "CA delivery",
+      value: compactMoneyFmt.format(dashTotals.caDelivery),
+      rawValue: dashTotals.caDelivery,
+      previousValue: dashTotals.caDeliveryN1,
+      color: channelColors[2],
+    },
+    {
+      label: "CA Drive",
+      value: compactMoneyFmt.format(dashTotals.caDrive),
+      rawValue: dashTotals.caDrive,
+      previousValue: dashTotals.caDriveN1,
+      color: channelColors[1],
+    },
+    {
+      label: "CA Click & Collect",
+      value: compactMoneyFmt.format(dashTotals.caCnc),
+      rawValue: dashTotals.caCnc,
+      previousValue: dashTotals.caCncN1,
+      color: channelColors[3],
+    },
+    {
+      label: "CA Magasin",
+      value: compactMoneyFmt.format(dashTotals.caMagasin),
+      rawValue: dashTotals.caMagasin,
+      previousValue: dashTotals.caMagasinN1,
+      color: channelColors[0],
+    },
+    {
+      label: "Marge",
+      value: compactMoneyFmt.format(dashTotals.marge),
+      rawValue: dashTotals.marge,
+      previousValue: dashTotals.margeN1,
+      color: "#0f172a",
+    },
+    {
+      label: "Taux de pertes",
+      value: pctFmt.format(dashTotals.tauxPertes),
+      rawValue: dashTotals.tauxPertes,
+      previousValue: dashTotals.tauxPertesN1,
+      color: "#b45309",
+    },
+    {
+      label: "Heures réalisées",
+      value:
+        workforceQuickMetrics.heuresPersonnel > 0
+          ? `${workforceQuickMetrics.heuresPersonnel.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} h`
+          : "—",
+      rawValue: workforceQuickMetrics.heuresPersonnel,
+      previousValue: workforceQuickMetrics.heuresPersonnelN1,
+      color: undefined,
+    },
+    {
+      label: "Heures prévues",
+      value:
+        workforceQuickMetrics.heuresTravail > 0
+          ? `${workforceQuickMetrics.heuresTravail.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} h`
+          : "—",
+      rawValue: workforceQuickMetrics.heuresTravail,
+      previousValue: workforceQuickMetrics.heuresTravailN1,
+      color: undefined,
+    },
+    {
+      label: "Écart d'heures",
+      value: `${laborDeltaHours.toLocaleString("fr-FR", {
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 0,
+        signDisplay: "exceptZero",
+      })} h`,
+      rawValue: laborDeltaHours,
+      previousValue: laborDeltaHoursN1,
+      color: laborDeltaHours >= 0 ? "#0f766e" : "#b91c1c",
+    },
+    {
+      label: "Taux horaire",
+      value:
+        workforceQuickMetrics.tauxHoraire !== null
+          ? `${workforceQuickMetrics.tauxHoraire.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} €`
+          : "—",
+      rawValue: workforceQuickMetrics.tauxHoraire,
+      previousValue: workforceQuickMetrics.tauxHoraireN1,
+      color: undefined,
+    },
+    {
+      label: "Coût RH",
+      value: workforceCostRh !== null ? compactMoneyFmt.format(workforceCostRh) : "—",
+      rawValue: workforceCostRh,
+      previousValue: workforceCostRhN1,
+      color: "#6b7280",
+    },
+    {
+      label: "% Perso réel",
+      value: persoReelPct !== null ? pctFmt.format(persoReelPct) : "—",
+      rawValue: persoReelPct,
+      previousValue: persoReelPctN1,
+      color: "#7c2d12",
+    },
+    {
+      label: "OSAT",
+      value:
+        workforceQuickMetrics.osat !== null
+          ? `${workforceQuickMetrics.osat.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`
+          : "—",
+      rawValue: workforceQuickMetrics.osat,
+      previousValue: workforceQuickMetrics.osatN1,
+      color: undefined,
+    },
+    {
+      label: "GXI",
+      value: currentGxi !== null ? `${currentGxi.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %` : "—",
+      rawValue: currentGxi,
+      previousValue: previousGxi,
+      color: undefined,
+    },
+    {
+      label: "Google",
+      value:
+        workforceQuickMetrics.google !== null
+          ? `${workforceQuickMetrics.google.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} /5`
+          : "—",
+      rawValue: workforceQuickMetrics.google,
+      previousValue: workforceQuickMetrics.googleN1,
+      color: undefined,
+    },
+  ].map((kpi) => ({
+    ...kpi,
+    change:
+      kpi.rawValue !== null && kpi.previousValue !== null && kpi.previousValue !== undefined
+        ? pctChange(kpi.rawValue, kpi.previousValue)
+        : null,
+  }));
 
   return (
     <TabsContent value="overview" className="space-y-4">
@@ -225,171 +389,7 @@ export function DashboardOverview({
       {dashLoading && <div className="text-sm text-muted-foreground">Chargement du tableau de bord...</div>}
 
       <div className="flex flex-wrap gap-3">
-        {[
-          {
-            label: "Chiffre d'affaires",
-            value: compactMoneyFmt.format(dashTotals.ca),
-            change: pctChange(dashTotals.ca, dashTotals.caN1),
-            color: undefined,
-          },
-          {
-            label: "Nombre de ventes",
-            value: intFmt.format(dashTotals.clients),
-            change: pctChange(dashTotals.clients, dashTotals.clientsN1),
-            color: undefined,
-          },
-          {
-            label: "Panier moyen",
-            value: moneyFmt.format(dashTotals.mp || 0),
-            change: pctChange(dashTotals.mp, dashTotals.mpN1),
-            color: undefined,
-          },
-          {
-            label: "CA delivery",
-            value: compactMoneyFmt.format(dashTotals.caDelivery),
-            change: pctChange(dashTotals.caDelivery, dashTotals.caDeliveryN1),
-            color: channelColors[2],
-          },
-          {
-            label: "CA Drive",
-            value: compactMoneyFmt.format(dashTotals.caDrive),
-            change: pctChange(dashTotals.caDrive, dashTotals.caDriveN1),
-            color: channelColors[1],
-          },
-          {
-            label: "CA Click & Collect",
-            value: compactMoneyFmt.format(dashTotals.caCnc),
-            change: pctChange(dashTotals.caCnc, dashTotals.caCncN1),
-            color: channelColors[3],
-          },
-          {
-            label: "CA Magasin",
-            value: compactMoneyFmt.format(dashTotals.caMagasin),
-            change: pctChange(dashTotals.caMagasin, dashTotals.caMagasinN1),
-            color: channelColors[0],
-          },
-          {
-            label: "Marge",
-            value: compactMoneyFmt.format(dashTotals.marge),
-            change: pctChange(dashTotals.marge, dashTotals.margeN1),
-            color: "#0f172a",
-          },
-          {
-            label: "Taux de pertes",
-            value: pctFmt.format(dashTotals.tauxPertes),
-            change: pctChange(dashTotals.tauxPertes, dashTotals.tauxPertesN1),
-            color: "#b45309",
-          },
-          {
-            label: "Heures personnel",
-            value:
-              workforceQuickMetrics.heuresPersonnel > 0
-                ? `${workforceQuickMetrics.heuresPersonnel.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} h`
-                : "—",
-            change:
-              workforceQuickMetrics.heuresPersonnelN1 !== null
-                ? pctChange(workforceQuickMetrics.heuresPersonnel, workforceQuickMetrics.heuresPersonnelN1)
-                : null,
-            color: undefined,
-          },
-          {
-            label: "Heures formation",
-            value:
-              workforceQuickMetrics.heuresTravail > 0
-                ? `${workforceQuickMetrics.heuresTravail.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} h`
-                : "—",
-            change:
-              workforceQuickMetrics.heuresTravailN1 !== null
-                ? pctChange(workforceQuickMetrics.heuresTravail, workforceQuickMetrics.heuresTravailN1)
-                : null,
-            color: undefined,
-          },
-          {
-            label: "Taux horaire",
-            value:
-              workforceQuickMetrics.tauxHoraire !== null
-                ? `${workforceQuickMetrics.tauxHoraire.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} €`
-                : "—",
-            change:
-              workforceQuickMetrics.tauxHoraire !== null && workforceQuickMetrics.tauxHoraireN1 !== null
-                ? pctChange(workforceQuickMetrics.tauxHoraire, workforceQuickMetrics.tauxHoraireN1)
-                : null,
-            color: undefined,
-          },
-          {
-            label: "Coût RH",
-            value: workforceCostRh !== null ? compactMoneyFmt.format(workforceCostRh) : "—",
-            change:
-              workforceCostRh !== null && workforceCostRhN1 !== null
-                ? pctChange(workforceCostRh, workforceCostRhN1)
-                : null,
-            color: "#6b7280",
-          },
-          {
-            label: "% Perso réel",
-            value: persoReelPct !== null ? pctFmt.format(persoReelPct) : "—",
-            change:
-              persoReelPct !== null && persoReelPctN1 !== null
-                ? pctChange(persoReelPct, persoReelPctN1)
-                : null,
-            color: "#7c2d12",
-          },
-          {
-            label: "OSAT",
-            value:
-              workforceQuickMetrics.osat !== null
-                ? `${workforceQuickMetrics.osat.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`
-                : "—",
-            change:
-              workforceQuickMetrics.osat !== null && workforceQuickMetrics.osatN1 !== null
-                ? pctChange(workforceQuickMetrics.osat, workforceQuickMetrics.osatN1)
-                : null,
-            color: undefined,
-          },
-          {
-            label: "GXI",
-            value: (() => {
-              const g = workforceQuickMetrics.google;
-              const o = workforceQuickMetrics.osat;
-              if (g !== null && o !== null) {
-                const composite = (g / 5 * 100) * 0.8 + o * 0.2;
-                return `${composite.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`;
-              }
-              if (workforceQuickMetrics.gxi !== null) {
-                return `${workforceQuickMetrics.gxi.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`;
-              }
-              return "—";
-            })(),
-            change: (() => {
-              const g = workforceQuickMetrics.google;
-              const gN1 = workforceQuickMetrics.googleN1;
-              const o = workforceQuickMetrics.osat;
-              const oN1 = workforceQuickMetrics.osatN1;
-              if (g !== null && o !== null && gN1 !== null && oN1 !== null) {
-                const composite = (g / 5 * 100) * 0.8 + o * 0.2;
-                const compositeN1 = (gN1 / 5 * 100) * 0.8 + oN1 * 0.2;
-                return pctChange(composite, compositeN1);
-              }
-              if (workforceQuickMetrics.gxi !== null && workforceQuickMetrics.gxiN1 !== null) {
-                return pctChange(workforceQuickMetrics.gxi, workforceQuickMetrics.gxiN1);
-              }
-              return null;
-            })(),
-            color: undefined,
-          },
-          {
-            label: "Google",
-            value:
-              workforceQuickMetrics.google !== null
-                ? `${workforceQuickMetrics.google.toLocaleString("fr-FR", { maximumFractionDigits: 2 })} /5`
-                : "—",
-            change:
-              workforceQuickMetrics.google !== null && workforceQuickMetrics.googleN1 !== null
-                ? pctChange(workforceQuickMetrics.google, workforceQuickMetrics.googleN1)
-                : null,
-            color: undefined,
-          },
-        ].map((kpi) => (
+        {kpis.map((kpi) => (
           <Card key={kpi.label} className="w-fit min-w-[130px]">
             <CardContent className="space-y-1 px-4 py-3">
               <div className="whitespace-nowrap text-sm text-muted-foreground">

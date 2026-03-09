@@ -2,7 +2,6 @@
 import { createPortal } from "react-dom";
 import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { InfoTooltip } from "@/components/ui/info-tooltip";
 
 type ExtraKpiDraft = {
   heuresPersonnel: string;
@@ -22,6 +21,9 @@ type Props = {
   uploading: boolean;
   commentN1: string | null;
   commentN1Loading: boolean;
+  laborAutofillLoading?: boolean;
+  laborAutofillError?: string | null;
+  autoLaborFieldsLocked?: boolean;
   initialCommentDraft: string;
   initialExtraKpiDraft: ExtraKpiDraft;
   onCancel: () => void;
@@ -55,6 +57,9 @@ export function ImportConfirmModal({
   uploading,
   commentN1,
   commentN1Loading,
+  laborAutofillLoading = false,
+  laborAutofillError = null,
+  autoLaborFieldsLocked = false,
   initialCommentDraft,
   initialExtraKpiDraft,
   onCancel,
@@ -72,6 +77,11 @@ export function ImportConfirmModal({
     return () => window.clearTimeout(timeoutId);
   }, [open, initialCommentDraft, initialExtraKpiDraft]);
 
+  const osatValue = parseNumericValue(extraKpiDraft.osat);
+  const googleValue = parseNumericValue(extraKpiDraft.google);
+  const isOsatValid = osatValue !== null && osatValue >= 0 && osatValue <= 100;
+  const isGoogleValid = googleValue !== null && googleValue >= 0 && googleValue <= 5;
+
   const canConfirm = useMemo(() => {
     const values = [
       extraKpiDraft.heuresPersonnel,
@@ -80,15 +90,31 @@ export function ImportConfirmModal({
       extraKpiDraft.osat,
       extraKpiDraft.google,
     ];
-    return values.every((value) => parseNumericValue(value) !== null);
-  }, [extraKpiDraft]);
+    return (
+      !laborAutofillLoading &&
+      !laborAutofillError &&
+      values.every((value) => parseNumericValue(value) !== null) &&
+      isOsatValid &&
+      isGoogleValid
+    );
+  }, [extraKpiDraft, isGoogleValid, isOsatValid, laborAutofillError, laborAutofillLoading]);
 
   const validationMessage = canConfirm
     ? null
-    : "Les champs RH et notes satisfaction sont obligatoires et doivent être numériques.";
+    : laborAutofillLoading
+      ? "Chargement des données RH MyRHIS..."
+      : laborAutofillError
+        ? laborAutofillError
+        : !isOsatValid
+          ? "La note OSAT doit être comprise entre 0 et 100."
+          : !isGoogleValid
+            ? "La note Google doit être comprise entre 0 et 5."
+            : "Les notes satisfaction doivent être numériques.";
 
   const inputClass =
     "h-10 rounded-md border bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40";
+  const readOnlyInputClass =
+    "cursor-not-allowed border-slate-300 bg-slate-200 text-slate-700";
 
   if (!open) return null;
   if (typeof document === "undefined") return null;
@@ -106,10 +132,18 @@ export function ImportConfirmModal({
             <div>
               <h3 className="text-base font-semibold">Confirmer l'import</h3>
               <p className="text-sm text-muted-foreground">
-                Complète les données RH et les notes avant validation.
+                Complète les notes avant validation.
               </p>
             </div>
-            <Button type="button" variant="ghost" size="icon" onClick={onCancel} disabled={uploading} aria-label="Fermer">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onCancel}
+              disabled={uploading}
+              aria-label="Fermer"
+              className="border border-input"
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -136,12 +170,15 @@ export function ImportConfirmModal({
           </div>
 
           <div className="rounded-md border p-3">
-            <div className="mb-2 text-sm font-medium">Données RH (obligatoire)</div>
+            <div className="mb-1 text-sm font-medium">Données RH</div>
+            <div className="mb-3 text-xs text-muted-foreground">
+              Ces données proviennent de l'API MyRHIS et ne peuvent pas être modifiées ici.
+            </div>
             <div className="grid gap-2 md:grid-cols-2">
               <label className="space-y-1">
-                <div className="text-xs text-muted-foreground">Heures personnel</div>
+                <div className="text-xs text-muted-foreground">Heures personnel réalisées</div>
                 <input
-                  className={`${inputClass} w-full`}
+                  className={`${inputClass} ${autoLaborFieldsLocked ? readOnlyInputClass : ""} w-full`}
                   value={extraKpiDraft.heuresPersonnel}
                   onChange={(e) =>
                     setExtraKpiDraft((prev) => ({
@@ -151,19 +188,14 @@ export function ImportConfirmModal({
                   }
                   placeholder="Heures personnel"
                   inputMode="decimal"
-                  disabled={uploading}
+                  disabled={uploading || laborAutofillLoading}
+                  readOnly={autoLaborFieldsLocked}
                 />
               </label>
               <label className="space-y-1">
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <span>Heures formation (coût complémentaire)</span>
-                  <InfoTooltip
-                    side="top"
-                    content="Coût additionnel saisi manuellement (ex: heures de formation, renfort ponctuel, autre coût RH complémentaire)."
-                  />
-                </div>
+                <div className="text-xs text-muted-foreground">Heures prévues</div>
                 <input
-                  className={`${inputClass} w-full`}
+                  className={`${inputClass} ${autoLaborFieldsLocked ? readOnlyInputClass : ""} w-full`}
                   value={extraKpiDraft.heuresTravail}
                   onChange={(e) =>
                     setExtraKpiDraft((prev) => ({
@@ -171,9 +203,10 @@ export function ImportConfirmModal({
                       heuresTravail: sanitizeDecimalInput(e.target.value),
                     }))
                   }
-                  placeholder="Heures formation (coût complémentaire)"
+                  placeholder="Heures prévues"
                   inputMode="decimal"
-                  disabled={uploading}
+                  disabled={uploading || laborAutofillLoading}
+                  readOnly={autoLaborFieldsLocked}
                 />
               </label>
               <label className="space-y-1 md:col-span-2">
@@ -211,11 +244,13 @@ export function ImportConfirmModal({
                   }
                   placeholder="OSAT (%)"
                   inputMode="decimal"
+                  min={0}
+                  max={100}
                   disabled={uploading}
                 />
               </label>
               <label className="space-y-1">
-                <div className="text-xs text-muted-foreground">Google</div>
+                <div className="text-xs text-muted-foreground">Google (/5)</div>
                 <input
                   className={`${inputClass} w-full`}
                   value={extraKpiDraft.google}
@@ -225,8 +260,10 @@ export function ImportConfirmModal({
                       google: sanitizeDecimalInput(e.target.value),
                     }))
                   }
-                  placeholder="Google"
+                  placeholder="Google (/5)"
                   inputMode="decimal"
+                  min={0}
+                  max={5}
                   disabled={uploading}
                 />
               </label>

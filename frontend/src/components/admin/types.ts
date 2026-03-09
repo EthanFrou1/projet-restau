@@ -2,6 +2,7 @@ export type UserRole = "ADMIN" | "MANAGER" | "READONLY" | "DEV";
 
 export type RestaurantRef = {
   id: number;
+  myrhis_id?: number | null;
   code: string;
   name: string;
 };

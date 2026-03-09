@@ -1,0 +1,52 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    env_file:
+      - ./.env.prod
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - prod_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    env_file:
+      - ./.env.prod
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      STORAGE_PATH: ${STORAGE_PATH}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      APP_BASE_URL: ${APP_BASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./storage:${STORAGE_PATH}
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  front:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:8080:80"
+
+volumes:
+  prod_db_data:

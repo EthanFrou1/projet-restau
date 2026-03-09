@@ -35,7 +35,7 @@ type Props = {
   totalAssocPages: number;
   onSetAssocUsersPage: (page: number) => void;
   onRemoveAssoc: (user: AssocUser, code: string) => void;
-  onSavedAssign: (userId: number, codes: string[]) => void;
+  onSavedAssign: (userId: number, codes: string[]) => void | Promise<void>;
 };
 
 export function DevPage({

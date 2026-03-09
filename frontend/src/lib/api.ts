@@ -1,6 +1,9 @@
 import { parseApiError } from "@/lib/apiErrors";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+export const SESSION_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
+const LAST_ACTIVITY_KEY = "last_activity_at";
+const SESSION_LOST_EVENT = "auth:session-lost";
 
 let accessToken: string | null = localStorage.getItem("access_token");
 
@@ -14,6 +17,32 @@ export function getAccessToken() {
   return accessToken;
 }
 
+export function markSessionActivity(at = Date.now()) {
+  localStorage.setItem(LAST_ACTIVITY_KEY, String(at));
+}
+
+export function getLastSessionActivity() {
+  const value = localStorage.getItem(LAST_ACTIVITY_KEY);
+  const parsed = value ? Number(value) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function clearAuthState() {
+  setAccessToken(null);
+  localStorage.removeItem("expires_at");
+  localStorage.removeItem(LAST_ACTIVITY_KEY);
+}
+
+export function notifySessionLost() {
+  clearAuthState();
+  window.dispatchEvent(new Event(SESSION_LOST_EVENT));
+}
+
+export function onSessionLost(handler: () => void) {
+  window.addEventListener(SESSION_LOST_EVENT, handler);
+  return () => window.removeEventListener(SESSION_LOST_EVENT, handler);
+}
+
 async function tryRefresh(): Promise<boolean> {
   const res = await fetch(`${API_URL}/auth/refresh`, {
     method: "POST",
@@ -25,6 +54,7 @@ async function tryRefresh(): Promise<boolean> {
   const data = (await res.json()) as { access_token: string; expires_at: string };
   setAccessToken(data.access_token);
   localStorage.setItem("expires_at", data.expires_at);
+  markSessionActivity();
   return true;
 }
 
@@ -57,6 +87,8 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
         headers: h2,
         credentials: "include",
       });
+    } else {
+      notifySessionLost();
     }
   }
 
@@ -71,5 +103,6 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
    throw parseApiError(res, detail);
  }
 
+  markSessionActivity();
   return (await res.json()) as T;
 }

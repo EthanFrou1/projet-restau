@@ -5,11 +5,12 @@ from app.core.seed import seed_dev_user_if_needed
 from app.db.session import engine
 from app.api.auth import router as auth_router
 from app.api.admin import router as admin_router
-from app.api.debug import router as debug_router
+from app.api.debug import router as admin_management_router
 from app.api.audit import router as audit_router
 from app.api.bk_reports import router as bk_reports_router
 from app.api.restaurants import router as restaurants_router
 from app.api.budget import router as budget_router
+from app.api.external_myrhis import router as external_myrhis_router
 from app.api.auth_deps import require_roles
 from app.core.roles import Role
 import os
@@ -20,11 +21,12 @@ app = FastAPI(title="Projet Restau API", version="0.1.0")
 
 app.include_router(auth_router)
 app.include_router(admin_router)
-app.include_router(debug_router)
+app.include_router(admin_management_router)
 app.include_router(audit_router)
 app.include_router(bk_reports_router)
 app.include_router(restaurants_router)
 app.include_router(budget_router)
+app.include_router(external_myrhis_router)
 
 cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",")
 
